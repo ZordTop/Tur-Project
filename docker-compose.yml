@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    container_name: tur-project-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+    # Для разработки: код монтируется в контейнер, правки видны без пересборки.
+    # В production эту секцию лучше убрать.
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm start

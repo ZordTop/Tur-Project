@@ -1,0 +1,521 @@
+/* ===== Переменные и сброс ===== */
+:root {
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-text: #1b1f26;
+  --color-muted: #6b7280;
+  --color-primary: #1565c0;
+  --color-primary-dark: #0d47a1;
+  --color-border: #e3e7ee;
+  --radius: 14px;
+  --shadow: 0 6px 24px rgba(17, 24, 39, 0.08);
+  --container: 1120px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  line-height: 1.6;
+  color: var(--color-text);
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--color-primary-dark);
+}
+
+.container {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.main {
+  flex: 1;
+}
+
+/* ===== Шапка ===== */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 68px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--color-text);
+}
+
+.logo:hover {
+  color: var(--color-text);
+}
+
+.logo__mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 1rem;
+}
+
+.nav {
+  display: flex;
+  gap: 24px;
+}
+
+.nav__link {
+  color: var(--color-text);
+  font-weight: 500;
+  padding: 6px 0;
+  border-bottom: 2px solid transparent;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.nav__link:hover,
+.nav__link.is-active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+/* Кнопка мобильного меню */
+.burger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 42px;
+  height: 42px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.burger span {
+  display: block;
+  height: 2px;
+  background: var(--color-text);
+  border-radius: 2px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.burger.is-open span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.burger.is-open span:nth-child(2) {
+  opacity: 0;
+}
+
+.burger.is-open span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ===== Кнопки ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn--primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.btn--primary:hover {
+  background: var(--color-primary-dark);
+  color: #fff;
+}
+
+.btn--ghost {
+  background: transparent;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.btn--block {
+  width: 100%;
+  margin-top: 16px;
+}
+
+/* ===== Первый экран ===== */
+.hero {
+  padding: 84px 0;
+  color: #fff;
+  background: linear-gradient(135deg, #0d47a1 0%, #1565c0 45%, #26a69a 100%);
+}
+
+.hero__inner {
+  max-width: 720px;
+}
+
+.hero__title {
+  margin: 0 0 16px;
+  font-size: clamp(1.9rem, 4vw, 2.9rem);
+  line-height: 1.2;
+}
+
+.hero__subtitle {
+  margin: 0 0 28px;
+  font-size: 1.05rem;
+  opacity: 0.92;
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* ===== Секции ===== */
+.section {
+  padding: 64px 0;
+}
+
+.section__title {
+  margin: 0 0 28px;
+  font-size: 1.6rem;
+}
+
+.page-title {
+  margin: 0 0 12px;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  line-height: 1.25;
+}
+
+.page-subtitle {
+  margin: 0 0 32px;
+  max-width: 720px;
+  color: var(--color-muted);
+}
+
+/* ===== Блоки преимуществ ===== */
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.feature {
+  padding: 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.feature__title {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.feature__text {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
+/* ===== Карточки туров ===== */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(17, 24, 39, 0.12);
+}
+
+.card__image {
+  aspect-ratio: 16 / 10;
+  background: linear-gradient(135deg, #1565c0, #26a69a);
+  overflow: hidden;
+}
+
+.card__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 20px;
+}
+
+.card__meta {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.card__title {
+  margin: 0 0 10px;
+  font-size: 1.2rem;
+}
+
+.card__title a {
+  color: var(--color-text);
+}
+
+.card__title a:hover {
+  color: var(--color-primary);
+}
+
+.card__text {
+  margin: 0 0 16px;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
+.card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.card__price {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.card__rating {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+/* ===== Страница тура ===== */
+.back-link {
+  display: inline-block;
+  margin-bottom: 24px;
+  font-size: 0.95rem;
+}
+
+.tour {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+.tour__image {
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: linear-gradient(135deg, #1565c0, #26a69a);
+  aspect-ratio: 4 / 3;
+}
+
+.tour__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tour__details {
+  margin: 0 0 24px;
+  border-top: 1px solid var(--color-border);
+}
+
+.tour__row {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tour__row dt {
+  font-weight: 600;
+  color: var(--color-muted);
+  font-size: 0.92rem;
+}
+
+.tour__row dd {
+  margin: 0;
+}
+
+.tour__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.tour__price {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+/* ===== Ошибки ===== */
+.error__code {
+  margin: 0 0 8px;
+  font-size: 4rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--color-primary);
+  opacity: 0.25;
+}
+
+/* ===== Подвал ===== */
+.footer {
+  background: #101826;
+  color: #c7d0dc;
+  padding: 28px 0;
+  margin-top: 40px;
+}
+
+.footer__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.footer__copy {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.footer__nav {
+  display: flex;
+  gap: 20px;
+}
+
+.footer__nav a {
+  color: #c7d0dc;
+  font-size: 0.9rem;
+}
+
+.footer__nav a:hover {
+  color: #fff;
+}
+
+/* ===== Адаптив ===== */
+@media (max-width: 860px) {
+  .tour {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .burger {
+    display: flex;
+  }
+
+  .nav {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    gap: 0;
+    padding: 8px 20px 16px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    display: none;
+  }
+
+  .nav.is-open {
+    display: flex;
+  }
+
+  .nav__link {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .nav__link:last-child {
+    border-bottom: none;
+  }
+
+  .hero {
+    padding: 56px 0;
+  }
+
+  .section {
+    padding: 44px 0;
+  }
+
+  .tour__row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

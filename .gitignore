@@ -1,0 +1,25 @@
+# Зависимости
+node_modules/
+
+# Логи
+logs
+*.log
+npm-debug.log*
+
+# Переменные окружения (секреты не должны попадать в git)
+.env
+.env.local
+
+# Кэш и системный мусор
+.npm
+.cache/
+.DS_Store
+Thumbs.db
+
+# Настройки редакторов
+.vscode/
+.idea/
+
+# Временные файлы
+tmp/
+temp/

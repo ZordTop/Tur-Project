@@ -1,0 +1,32 @@
+<%- include('partials/header') %>
+
+<section class="section">
+  <div class="container">
+    <h1 class="page-title">Наши туры</h1>
+    <p class="page-subtitle">Стоимость указана за одного человека и включает рейс, проживание и трансферы.</p>
+
+    <div class="cards">
+      <% tours.forEach((tour) => { %>
+        <article class="card">
+          <div class="card__image">
+            <img src="<%= tour.image %>" alt="<%= tour.title %>" loading="lazy">
+          </div>
+          <div class="card__body">
+            <p class="card__meta"><%= tour.country %> · <%= tour.city %> · <%= tour.nights %> ночей</p>
+            <h2 class="card__title">
+              <a href="/tours/<%= tour.id %>"><%= tour.title %></a>
+            </h2>
+            <p class="card__text"><%= tour.description %></p>
+            <div class="card__footer">
+              <span class="card__price"><%= tour.price.toLocaleString('ru-RU') %> ₽</span>
+              <span class="card__rating">Рейтинг <%= tour.rating %></span>
+            </div>
+            <a class="btn btn--primary btn--block" href="/tours/<%= tour.id %>">Подробнее</a>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

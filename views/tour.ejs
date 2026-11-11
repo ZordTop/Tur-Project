@@ -1,0 +1,49 @@
+<%- include('partials/header') %>
+
+<section class="section">
+  <div class="container">
+    <a class="back-link" href="/tours">← Все туры</a>
+
+    <article class="tour">
+      <div class="tour__image">
+        <img src="<%= tour.image %>" alt="<%= tour.title %>">
+      </div>
+
+      <div class="tour__content">
+        <p class="card__meta"><%= tour.country %> · <%= tour.city %></p>
+        <h1 class="page-title"><%= tour.title %></h1>
+        <p class="page-subtitle"><%= tour.description %></p>
+
+        <dl class="tour__details">
+          <div class="tour__row">
+            <dt>Перелёт</dt>
+            <dd><%= tour.flight %></dd>
+          </div>
+          <div class="tour__row">
+            <dt>Проживание</dt>
+            <dd><%= tour.hotel %></dd>
+          </div>
+          <div class="tour__row">
+            <dt>Трансфер</dt>
+            <dd><%= tour.transfer %></dd>
+          </div>
+          <div class="tour__row">
+            <dt>Длительность</dt>
+            <dd><%= tour.nights %> ночей</dd>
+          </div>
+          <div class="tour__row">
+            <dt>Рейтинг</dt>
+            <dd><%= tour.rating %> из 5</dd>
+          </div>
+        </dl>
+
+        <div class="tour__footer">
+          <span class="tour__price"><%= tour.price.toLocaleString('ru-RU') %> ₽</span>
+          <button class="btn btn--primary" type="button" data-book="<%= tour.id %>">Забронировать</button>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

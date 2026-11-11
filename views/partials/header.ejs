@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= typeof title !== 'undefined' ? title : 'Туристический сайт' %></title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container header__inner">
+      <a class="logo" href="/">
+        <span class="logo__mark">Т</span>
+        <span class="logo__text">ТурПроект</span>
+      </a>
+
+      <button class="burger" type="button" aria-label="Открыть меню" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+
+      <nav class="nav" id="nav">
+        <a class="nav__link" href="/">Главная</a>
+        <a class="nav__link" href="/tours">Туры</a>
+        <a class="nav__link" href="/about">О нас</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main">

@@ -1,0 +1,21 @@
+{
+  "name": "tur-project",
+  "version": "1.0.0",
+  "description": "Туристический сайт — список туров, рейсы, проживание и трансферы",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "tourism",
+    "travel",
+    "express",
+    "ejs"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "ejs": "^3.1.10",
+    "express": "^4.19.2"
+  }
+}
