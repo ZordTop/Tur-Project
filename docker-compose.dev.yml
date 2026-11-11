@@ -1,0 +1,16 @@
+# Оверрайд для разработки. Запуск:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Отличия от production:
+#   - исходники монтируются в контейнер, поэтому правки видны сразу;
+#   - команда npm run dev включает node --watch (перезапуск при изменении server.js);
+#   - node_modules из образа сохраняется в отдельном томе и не затирается хостом.
+services:
+  app:
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run dev

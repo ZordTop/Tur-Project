@@ -1,16 +1,19 @@
+# Production-запуск: код берётся из образа, исходники не монтируются.
+#   docker compose up -d --build
+#
+# Режим разработки (монтирование кода + автоперезапуск):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 services:
   app:
-    build: .
+    build:
+      context: .
+    image: tur-project:latest
     container_name: tur-project-app
     ports:
-      - "3000:3000"
+      # Снаружи порт можно поменять через APP_PORT, внутри всегда 3000
+      - "${APP_PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
     restart: unless-stopped
-    # Для разработки: код монтируется в контейнер, правки видны без пересборки.
-    # В production эту секцию лучше убрать.
-    volumes:
-      - .:/app
-      - /app/node_modules
-    command: npm start
+    # healthcheck наследуется из Dockerfile и проверяет /healthz

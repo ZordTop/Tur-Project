@@ -1,12 +1,30 @@
 # Файлы, которые не нужно копировать в образ Docker
+
+# Зависимости ставятся внутри образа через npm ci
 node_modules
+
+# Логи и отладочные файлы
 npm-debug.log*
+*.log
+
+# Git и настройки редакторов
 .git
 .gitignore
-.env
-.env.*
 .vscode
 .idea
+
+# Секреты и локальные переменные окружения
+.env
+.env.*
+
+# Файлы Docker и документация не нужны внутри контейнера
 Dockerfile
-docker-compose.yml
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
 README.md
+*.md
+
+# Временные файлы
+tmp
+temp

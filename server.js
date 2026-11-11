@@ -6,6 +6,8 @@ const toursRouter = require('./routes/tours');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+// 0.0.0.0 обязателен внутри контейнера: иначе порт не будет доступен снаружи
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Шаблонизатор EJS: файлы лежат в views/, расширение можно не указывать
 app.set('view engine', 'ejs');
@@ -37,6 +39,28 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Сервер запущен: http://localhost:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  console.log(`Сервер запущен: http://${HOST}:${PORT}`);
+});
+
+// Docker при docker stop / compose down присылает SIGTERM.
+// Закрываем сервер штатно, чтобы не обрывать активные запросы.
+let isShuttingDown = false;
+
+function shutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`Получен ${signal}, останавливаем сервер...`);
+
+  server.close(() => {
+    console.log('Сервер остановлен');
+    process.exit(0);
+  });
+
+  // Страховка: если соединения не закрылись за 10 секунд — выходим принудительно
+  setTimeout(() => process.exit(1), 10000).unref();
+}
+
+['SIGTERM', 'SIGINT'].forEach((signal) => {
+  process.on(signal, () => shutdown(signal));
 });
