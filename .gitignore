@@ -23,3 +23,6 @@ Thumbs.db
 # Временные файлы
 tmp/
 temp/
+
+# Локальная документация (не коммитить)
+PROJECT_ANALYSIS.md
