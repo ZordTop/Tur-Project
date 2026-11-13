@@ -1,0 +1,58 @@
+<%- include('partials/header') %>
+
+<section class="section">
+  <div class="container">
+    <h1 class="page-title">Панель менеджера</h1>
+    <p>Здравствуйте, <%= currentUser.full_name %>!</p>
+
+    <% if (tours) { %>
+      <h2>Активные туры (всего: <%= tours.length %>)</h2>
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>ID</th><th>Название</th><th>Страна</th><th>Город</th>
+            <th>Ночей</th><th>Цена</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% tours.forEach(t => { %>
+          <tr>
+            <td><%= t.id %></td>
+            <td><%= t.title %></td>
+            <td><%= t.country %></td>
+            <td><%= t.city %></td>
+            <td><%= t.nights %></td>
+            <td><%= t.total_price.toLocaleString('ru-RU') %> ₽</td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+
+    <% if (recentBookings) { %>
+      <h2>Мои последние заявки (всего: <%= recentBookings.length %>)</h2>
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>ID</th><th>Тур</th><th>Клиент</th><th>Телефон</th>
+            <th>Статус</th><th>Дата</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% recentBookings.forEach(b => { %>
+          <tr>
+            <td><%= b.id %></td>
+            <td><%= b.tour_title || '—' %></td>
+            <td><%= b.client_name %></td>
+            <td><%= b.client_phone %></td>
+            <td><%= b.status %></td>
+            <td><%= b.created_at %></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

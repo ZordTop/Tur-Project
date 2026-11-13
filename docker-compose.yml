@@ -3,6 +3,10 @@
 #
 # Режим разработки (монтирование кода + автоперезапуск):
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Инициализация БД (один раз при первом запуске):
+#   docker compose exec app node db/init.js
+#   docker compose exec app node db/seed.js
 services:
   app:
     build:
@@ -13,7 +17,37 @@ services:
       # Снаружи порт можно поменять через APP_PORT, внутри всегда 3000
       - "${APP_PORT:-3000}:3000"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000
+      - DATABASE_URL=postgres://tur:${POSTGRES_PASSWORD:-tur_pass}@db:5432/tur_project
+      - SESSION_SECRET=${SESSION_SECRET:-tur-project-secret-change-in-production}
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     # healthcheck наследуется из Dockerfile и проверяет /healthz
+
+  db:
+    image: postgres:16-alpine
+    container_name: tur-project-db
+    environment:
+      - POSTGRES_USER=tur
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-tur_pass}
+      - POSTGRES_DB=tur_project
+    volumes:
+      # Данные переживают удаление контейнера: docker compose down их НЕ трогает.
+      # Полная очистка БД: docker compose down -v
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Проброс наружу для отладки; наружный порт меняется через DB_PORT
+      - "${DB_PORT:-5432}:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tur -d tur_project"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  pgdata:
