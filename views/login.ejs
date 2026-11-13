@@ -1,0 +1,46 @@
+<%- include('partials/header') %>
+
+<section class="section">
+  <div class="container">
+    <h1 class="page-title">Вход</h1>
+
+    <% if (error) { %>
+      <div class="alert alert--error">
+        <%= error %>
+      </div>
+    <% } %>
+
+    <form method="post" action="/auth/login" class="form">
+      <div class="form__group">
+        <label class="form__label" for="email">Email</label>
+        <input
+          class="form__input"
+          type="email"
+          id="email"
+          name="email"
+          placeholder="you@example.com"
+          required
+        >
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="password">Пароль</label>
+        <input
+          class="form__input"
+          type="password"
+          id="password"
+          name="password"
+          placeholder="••••••••"
+          required
+        >
+      </div>
+
+      <div class="form__actions">
+        <button class="btn btn--primary" type="submit">Войти</button>
+        <a class="btn btn--secondary" href="/auth/register">Нет аккаунта?</a>
+      </div>
+    </form>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

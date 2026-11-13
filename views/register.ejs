@@ -1,0 +1,70 @@
+<%- include('partials/header') %>
+
+<section class="section">
+  <div class="container">
+    <h1 class="page-title">Регистрация</h1>
+
+    <% if (error) { %>
+      <div class="alert alert--error">
+        <%= error %>
+      </div>
+    <% } %>
+
+    <form method="post" action="/auth/register" class="form">
+      <div class="form__group">
+        <label class="form__label" for="email">Email</label>
+        <input
+          class="form__input"
+          type="email"
+          id="email"
+          name="email"
+          placeholder="you@example.com"
+          required
+        >
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="password">Пароль</label>
+        <input
+          class="form__input"
+          type="password"
+          id="password"
+          name="password"
+          placeholder="Минимум 8 символов"
+          required
+        >
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="full_name">ФИО</label>
+        <input
+          class="form__input"
+          type="text"
+          id="full_name"
+          name="full_name"
+          placeholder="Иванов Иван Иванович"
+          required
+        >
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="phone">Телефон</label>
+        <input
+          class="form__input"
+          type="tel"
+          id="phone"
+          name="phone"
+          placeholder="+7-900-000-00-00"
+          required
+        >
+      </div>
+
+      <div class="form__actions">
+        <button class="btn btn--primary" type="submit">Зарегистрироваться</button>
+        <a class="btn btn--secondary" href="/auth/login">Уже есть аккаунт?</a>
+      </div>
+    </form>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

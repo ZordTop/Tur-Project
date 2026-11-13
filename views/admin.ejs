@@ -1,0 +1,79 @@
+<%- include('partials/header') %>
+
+<section class="section">
+  <div class="container">
+    <h1 class="page-title">Панель админа</h1>
+
+    <% if (tours) { %>
+      <h2>Туры (всего: <%= tours.length %>)</h2>
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>ID</th><th>Название</th><th>Страна</th><th>Город</th>
+            <th>Цена</th><th>Активен</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% tours.forEach(t => { %>
+          <tr>
+            <td><%= t.id %></td>
+            <td><%= t.title %></td>
+            <td><%= t.country %></td>
+            <td><%= t.city %></td>
+            <td><%= t.total_price.toLocaleString('ru-RU') %> ₽</td>
+            <td><%= t.is_active ? 'да' : 'нет' %></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+
+    <% if (bookings) { %>
+      <h2>Заявки (всего: <%= bookings.length %>)</h2>
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>ID</th><th>Тур</th><th>Клиент</th><th>Телефон</th>
+            <th>Статус</th><th>Дата</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% bookings.forEach(b => { %>
+          <tr>
+            <td><%= b.id %></td>
+            <td><%= b.tour_title || '—' %></td>
+            <td><%= b.client_name %></td>
+            <td><%= b.client_phone %></td>
+            <td><%= b.status %></td>
+            <td><%= b.created_at %></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+
+    <% if (users) { %>
+      <h2>Пользователи (всего: <%= users.length %>)</h2>
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>ID</th><th>Email</th><th>ФИО</th><th>Роль</th><th>Заблокирован</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% users.forEach(u => { %>
+          <tr>
+            <td><%= u.id %></td>
+            <td><%= u.email %></td>
+            <td><%= u.full_name %></td>
+            <td><%= u.role %></td>
+            <td><%= u.is_blocked ? 'да' : 'нет' %></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</section>
+
+<%- include('partials/footer') %>
