@@ -794,3 +794,319 @@ server.js
 ---
 
 *Этот файл является внутренним отчётом и не предназначен для коммита в GitHub.*
+
+---
+
+# Часть II. Обновлённый анализ — состояние после добавления БД и авторизации
+
+> Раздел ниже описывает текущее состояние репозитория (коммит `15f9c07`, 19 коммитов).
+> Всё, что описано в Части I выше, остаётся верным для базового каркаса (Express + EJS + Docker), но к нему добавлены: PostgreSQL, сессии, ролевая авторизация, панели администратора и менеджера.
+
+---
+
+## 12. Обновлённая файловая структура (текущее состояние)
+
+```
+Tur-Project/
+├── .dockerignore              # Исключения из Docker-образа
+├── .gitignore                 # Исключения из Git
+├── DATA_CONTRACT.md           # Контракт данных (реализован в БД)
+├── docker-compose.yml         # Production: приложение + PostgreSQL
+├── docker-compose.dev.yml     # Оверрайд для разработки (bind mount + --watch)
+├── Dockerfile                 # Сборка образа (node:20-alpine)
+├── package.json               # 5 production-зависимостей
+├── package-lock.json          # Фиксация версий
+├── PROJECT_ANALYSIS.md        # Этот отчёт
+├── README.md                  # Описание для GitHub
+│
+├── server.js                  # Точка входа (обновлён: сессии, auth, /admin, /manager)
+│
+├── db/                        # ← НОВАЯ ПАПКА: работа с PostgreSQL
+│   ├── pool.js                # Пул соединений pg (DATABASE_URL)
+│   ├── init.js                # CREATE TABLE users/tours/bookings + индексы
+│   └── seed.js                # 3 тестовых пользователя + 5 туров
+│
+├── middlewares/               # ← НОВАЯ ПАПКА: middleware-функции
+│   └── auth.js                # attachCurrentUser, requireAuth, requireRole, dropSession
+│
+├── routes/
+│   ├── index.js               # /, /healthz, /about
+│   ├── tours.js               # /tours, /tours/:id (пока из data/tours.js)
+│   └── auth.js                # ← НОВЫЙ: /auth/login, /auth/register, /auth/logout, /auth/me
+│
+├── data/
+│   └── tours.js               # Массив в памяти (используется routes/tours.js)
+│
+├── views/
+│   ├── index.ejs              # Главная
+│   ├── tours.ejs              # Список туров (из data/)
+│   ├── tour.ejs               # Страница одного тура
+│   ├── about.ejs              # О нас
+│   ├── login.ejs              # ← НОВЫЙ: форма входа
+│   ├── register.ejs           # ← НОВЫЙ: форма регистрации
+│   ├── admin.ejs              # ← НОВЫЙ: панель админа (туры, заявки, пользователи)
+│   ├── manager.ejs            # ← НОВЫЙ: панель менеджера (туры, свои заявки)
+│   ├── 404.ejs                # Не найдено
+│   ├── error.ejs              # Ошибка сервера
+│   └── partials/
+│       ├── header.ejs         # Шапка + навигация
+│       └── footer.ejs         # Подвал + подключение JS
+│
+├── public/
+│   ├── css/
+│   │   └── style.css          # 521 строка (без изменений)
+│   ├── js/
+│   │   └── main.js            # 44 строки (без изменений)
+│   └── images/                # Пустая папка (изображения не закоммичены)
+│
+└── node_modules/              # 76+ пакетов (не в git)
+```
+
+**Итого новых файлов:** 9 (`db/pool.js`, `db/init.js`, `db/seed.js`, `middlewares/auth.js`, `routes/auth.js`, `views/login.ejs`, `views/register.ejs`, `views/admin.ejs`, `views/manager.ejs`).
+
+---
+
+## 13. Обновлённые зависимости (`package.json`)
+
+| Пакет | Версия | Назначение |
+|-------|--------|------------|
+| `express` | `^4.19.2` | Веб-фреймворк (был) |
+| `ejs` | `^3.1.10` | Шаблонизатор (был) |
+| `bcryptjs` | `^2.4.3` | Хэширование и проверка паролей |
+| `express-session` | `^1.18.1` | Управление сессиями (cookie `connect.sid`) |
+| `pg` | `^8.13.0` | Драйвер PostgreSQL (пул соединений, запросы) |
+
+Новые npm-скрипты:
+| Скрипт | Команда | Назначение |
+|--------|---------|------------|
+| `db:init` | `node db/init.js` | Создание таблиц |
+| `db:seed` | `node db/seed.js` | Заполнение тестовыми данными |
+
+---
+
+## 14. `server.js` — что изменилось
+
+Теперь сервер подключает:
+
+```javascript
+const session = require('express-session');
+const authRouter = require('./routes/auth');
+const { attachCurrentUser, requireAuth, requireRole } = require('./middlewares/auth');
+const pool = require('./db/pool');
+```
+
+**Новые middleware-слои (в порядке выполнения):**
+1. `express-session` — сессии на cookie `connect.sid`, secret из `SESSION_SECRET`, maxAge 24ч.
+2. `attachCurrentUser` — при каждом запросе читает пользователя из БД по `req.session.userId`, кладёт в `res.locals.currentUser` (для шаблонов) и `req.user` (для middleware). Если пользователь заблокирован (`is_blocked = true`) — принудительный разлогин.
+
+**Новые маршруты:**
+| URL | Метод | Защита | Действие |
+|-----|-------|--------|----------|
+| `/auth/*` | GET/POST | — | Роутер `routes/auth.js` |
+| `/login`, `/register`, `/logout` | GET/POST | — | Алиасы (для `requireAuth`-редиректов) |
+| `/admin` | GET | `requireAuth` + `requireRole('admin')` | Панель: все туры, все заявки, все пользователи |
+| `/manager` | GET | `requireAuth` + `requireRole('admin','manager')` | Панель: активные туры + последние 20 заявок менеджера |
+
+**Trust proxy:** `app.set('trust proxy', 1)` — для корректной работы `cookie.secure` за nginx.
+
+---
+
+## 15. `db/` — работа с PostgreSQL
+
+### 15.1 `db/pool.js` (16 строк)
+
+Создаёт единый `Pool` из `pg` на основе `process.env.DATABASE_URL`. Экспортируется во все модули. Содержит обработчик `pool.on('error', ...)` для логов обрыва простаивающих соединений.
+
+### 15.2 `db/init.js` (81 строка)
+
+Идемпотентный скрипт (`CREATE TABLE IF NOT EXISTS`). Создаёт таблицы строго по `DATA_CONTRACT.md`:
+
+- **`users`** — `id`, `email` (UNIQUE), `password_hash`, `full_name`, `phone`, `role` (CHECK: user/manager/admin), `is_blocked`, `created_at`.
+- **`tours`** — `id`, `title`, `country`, `city`, `nights`, `rating` (CHECK 1.0–5.0), `image`, `description`, `flight_info`, `flight_price`, `hotel_name`, `hotel_stars` (CHECK 3/4/5), `hotel_info`, `hotel_price`, `transfer_info`, `transfer_price`, `total_price`, `is_active`.
+- **`bookings`** — `id`, `tour_id` (FK→tours), `user_id` (FK→users, nullable), `manager_id` (FK→users, nullable), `client_name`, `client_phone`, `comment`, `status` (CHECK: new/confirmed/cancelled), `created_at`.
+
+Индексы: `idx_tours_country`, `idx_tours_city`, `idx_tours_total`, `idx_bookings_user`, `idx_bookings_manager`.
+
+### 15.3 `db/seed.js` (179 строк)
+
+Идемпотентный seed (проверяет `count(*) FROM tours > 0`). Создаёт:
+
+**3 пользователя** (пароль `TestPass123!`, хэш bcrypt):
+| email | роль |
+|-------|------|
+| `admin@turist.ru` | admin |
+| `manager@turist.ru` | manager |
+| `user@turist.ru` | user |
+
+**5 туров** (Сочи, Стамбул, Прага, Анталья, Санкт-Петербург) с полными деталями по схеме `tours` из контракта.
+
+---
+
+## 16. `middlewares/auth.js` (112 строк) — ролевая защита
+
+Экспортирует 4 функции:
+
+| Функция | Назначение |
+|---------|------------|
+| `attachCurrentUser` | Глобальный middleware: читает пользователя из БД при каждом запросе. Кладёт в `res.locals.currentUser` (без `password_hash`). При `is_blocked = true` или удалённом пользователе — уничтожает сессию. |
+| `requireAuth` | Защита маршрутов: если `req.user` отсутствует — редирект на `/login?next=<current_url>`. |
+| `requireRole(...roles)` | Проверка роли: если роль не входит в список — редирект на `/tours?error=access_denied`. |
+| `dropSession` | Уничтожает сессию, чистит cookie `connect.sid`, редиректит на указанный путь. |
+
+**Ключевой принцип:** в сессии хранится только `userId`. Данные и статус блокировки всегда актуальны из БД — изменения применяются мгновенно, без перезахода.
+
+---
+
+## 17. `routes/auth.js` (174 строки) — авторизация
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/auth/register` | Форма регистрации (если уже залогинен — редирект по роли) |
+| POST | `/auth/register` | Валидация полей, проверка пароля ≥ 8 симв., bcrypt.hash, INSERT INTO users (role='user'), установка сессии |
+| GET | `/auth/login` | Форма входа |
+| POST | `/auth/login` | SELECT по email, проверка is_blocked, bcrypt.compare, req.session.userId, редирект по роли или на `next` |
+| POST | `/auth/logout` | Уничтожение сессии |
+| GET | `/auth/logout` | Выход по ссылке (для шапки) |
+| GET | `/auth/me` | JSON `{ user: currentUser }` для отладки (без password_hash) |
+
+Функция `homeFor(role)`: admin → `/admin`, manager → `/manager`, user → `/tours`.
+
+---
+
+## 18. Новые шаблоны (views)
+
+### 18.1 `views/login.ejs` (46 строк)
+Форма: email + пароль. Выводит `error` при неудаче. Кнопка «Войти» + ссылка «Нет аккаунта?».
+
+### 18.2 `views/register.ejs` (70 строк)
+Форма: email, пароль, ФИО, телефон. Валидация на сервере. Кнопка «Зарегистрироваться» + ссылка «Уже есть аккаунт?».
+
+### 18.3 `views/admin.ejs` (79 строк)
+Три таблицы: туры (ID, название, страна, город, цена, активен), заявки (ID, тур, клиент, телефон, статус, дата), пользователи (ID, email, ФИО, роль, заблокирован).
+
+### 18.4 `views/manager.ejs` (58 строк)
+Приветствие по имени. Две таблицы: активные туры (ID, название, страна, город, ночи, цена) и последние заявки этого менеджера.
+
+---
+
+## 19. Docker — обновлённый `docker-compose.yml`
+
+Добавлен сервис базы данных:
+
+```yaml
+services:
+  app:
+    environment:
+      - DATABASE_URL=postgres://tur:${POSTGRES_PASSWORD:-tur_pass}@db:5432/tur_project
+      - SESSION_SECRET=${SESSION_SECRET:-tur-project-secret-change-in-production}
+    depends_on:
+      db:
+        condition: service_healthy   # ждёт, пока Postgres будет готов
+
+  db:
+    image: postgres:16-alpine
+    container_name: tur-project-db
+    environment:
+      POSTGRES_USER: tur
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tur_pass}
+      POSTGRES_DB: tur_project
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # данные переживают docker compose down
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: pg_isready -U tur -d tur_project
+
+volumes:
+  pgdata:
+```
+
+Новые переменные окружения:
+| Переменная | По умолчанию | Назначение |
+|------------|-------------|------------|
+| `DATABASE_URL` | (в compose) | Строка подключения к PostgreSQL |
+| `SESSION_SECRET` | `tur-project-secret-...` | Подпись cookie сессии |
+| `POSTGRES_PASSWORD` | `tur_pass` | Пароль БД (для compose) |
+| `DB_PORT` | `5432` | Порт Postgres на хосте |
+
+Порядок инициализации при первом запуске:
+```powershell
+docker compose up -d --build
+docker compose exec app node db/init.js
+docker compose exec app node db/seed.js
+```
+
+---
+
+## 20. Обновлённый поток данных
+
+```
+Гость → GET /tours
+    → routes/tours.js → data/tours.js (массив в памяти) → tours.ejs
+
+Зарегистрированный user → GET /admin
+    → requireAuth (attachCurrentUser уже выполнил req.user)
+    → requireRole('admin') → 403-редирект (не админ)
+
+Админ → GET /admin
+    → attachCurrentUser: SELECT users WHERE id = session.userId
+    → requireAuth: req.user есть ✓
+    → requireRole('admin'): role === 'admin' ✓
+    → pool.query: SELECT * FROM tours / bookings / users
+    → admin.ejs (таблицы)
+
+POST /auth/login
+    → pool.query: SELECT * FROM users WHERE email = $1
+    → bcrypt.compare(password, password_hash)
+    → req.session.userId = user.id
+    → 302 → /admin | /manager | /tours
+```
+
+---
+
+## 21. Расхождения и замечания по текущему состоянию
+
+1. **`routes/tours.js` пока читает из `data/tours.js`**, а не из PostgreSQL. Данные в БД (seed) и в массиве не синхронизированы. Для каталога `/tours` нужно перевести роутер на `pool.query`.
+
+2. **Маршрут `/profile`** описан в `DATA_CONTRACT.md` (п. 3), но не реализован в коде. Личный кабинет клиента с его бронями отсутствует.
+
+3. **Кнопка «Забронировать»** (`tour.ejs` + `main.js`) — по-прежнему фронтенд-заглушка. POST `/bookings` не реализован.
+
+4. **`public/images/` пуста** (в текущем дереве файлов не обнаружено ни одного изображения). Пути `/images/tour-sochi.jpg` и т.д. из `data/tours.js` и seed не имеют реальных файлов.
+
+5. **`views/partials/header.ejs` не показывает ссылки на вход/выход и панели** — навигация содержит только «Главная», «Туры», «О нас». Для авторизованных пользователей UI-связь с `/admin`, `/manager`, `/auth/logout` отсутствует в шаблоне.
+
+6. **Сессии в памяти** (`express-session` default MemoryStore) — при рестарте контейнера все пользователи разлогинены. Для продакшена нужен `connect-pg-simple`.
+
+---
+
+## 22. Итоговая сводка (обновлённая)
+
+| Параметр | Значение |
+|----------|----------|
+| Фреймворк | Express 4 |
+| Шаблонизатор | EJS 3.1.10 |
+| Шаблонизатор | EJS 3.1.10 |
+| Node.js | 20 (Alpine) |
+| База данных | PostgreSQL 16 (pg 8.13) |
+| Таблицы | users, tours, bookings |
+| Авторизация | Сессии + bcrypt + роли (user/manager/admin) |
+| Middleware | attachCurrentUser, requireAuth, requireRole |
+| Страниц (шаблонов) | 10 (было 6 + login, register, admin, manager) |
+| Маршрутов | 14+ (было 5) |
+| Production-зависимостей | 5 (express, ejs, bcryptjs, express-session, pg) |
+| Docker-сервисы | app + db (postgres:16-alpine) |
+| Seed-пользователей | 3 (admin, manager, user) |
+| Seed-туров | 5 |
+| Коммитов | 19 |
+| Ветка | main (GitHub: ZordTop/Tur-Project) |
+
+---
+
+## 23. Ссылки на GitHub
+
+- Репозиторий: `https://github.com/ZordTop/Tur-Project`
+- PR #13 (bd) — добавление PostgreSQL, авторизации, панелей
+- PR #12 (feat/frontend-ui) — вёрстка шаблонов
+- PR #11 (feat/backend-logic) — серверная логика маршрутов
+- PR #8 (feat/db-and-auth) — первая итерация БД и auth
