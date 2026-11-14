@@ -79,123 +79,163 @@ async function seed() {
   }
 
   // ─── Шаг 4. Пять тестовых туров ───
-  // Набор полей повторяет таблицу tours из db/init.js.
-  // total_price нигде не «магическая цифра» — она складывается из трёх цен,
-  // поэтому в тестовых данных итог всегда сходится с составными частями.
+  // Набор полей повторяет таблицу tours из db/init.js (детализированная схема).
+  // total_price = flight_price + hotel_price + transfer_price.
+  // departure_at / arrival_at — будущие даты, чтобы туры были видны в поиске.
   const tours = [
     {
       title: 'Солнечный Сочи: всё включено',
-      country: 'Россия',
-      city: 'Сочи',
-      nights: 7,
-      rating: 4.7,
-      image: '/images/tour-sochi.jpg',
       description: 'Неделя на черноморском побережье: пляжи, канатная дорога на Красную Поляну и прогулки по Олимпийскому парку.',
-      flight_info: 'Москва → Сочи, 2ч 40мин, прямой',
+      image: '/images/tour-sochi.jpg',
+      rating: 4.7,
+      nights: 7,
+      // Перелёт
+      departure_city: 'Москва',
+      destination_country: 'Россия',
+      destination_city: 'Сочи',
+      departure_at: '2027-06-01 08:30',
+      arrival_at: '2027-06-01 11:10',
+      flight_duration: '2ч 40мин',
+      flight_class: 'economy',
       flight_price: 8500,
+      // Отель
       hotel_name: 'Жемчужина моря',
       hotel_stars: 4,
-      hotel_info: '300 м до моря, завтраки включены',
+      hotel_meal: 'BB',
       hotel_price: 32000,
-      transfer_info: 'Индивидуальный трансфер аэропорт–отель',
+      // Трансфер
+      transfer_type: 'private',
       transfer_price: 2500,
       total_price: 8500 + 32000 + 2500,
       is_active: true,
     },
     {
       title: 'Стамбул: две части света',
-      country: 'Турция',
-      city: 'Стамбул',
-      nights: 5,
-      rating: 4.8,
-      image: '/images/tour-istanbul.jpg',
       description: 'Айя-София, Голубая мечеть, Гранд-базар и прогулка по Босфору на закате.',
-      flight_info: 'Москва → Стамбул, 3ч 30мин, прямой',
+      image: '/images/tour-istanbul.jpg',
+      rating: 4.8,
+      nights: 5,
+      // Перелёт
+      departure_city: 'Москва',
+      destination_country: 'Турция',
+      destination_city: 'Стамбул',
+      departure_at: '2027-06-10 09:00',
+      arrival_at: '2027-06-10 12:30',
+      flight_duration: '3ч 30мин',
+      flight_class: 'economy',
       flight_price: 15000,
+      // Отель
       hotel_name: 'Golden Horn Palace',
       hotel_stars: 4,
-      hotel_info: 'Район Султанахмет, завтраки шведский стол',
+      hotel_meal: 'BB',
       hotel_price: 28000,
-      transfer_info: 'Групповой трансфер аэропорт–отель',
+      // Трансфер
+      transfer_type: 'bus',
       transfer_price: 3000,
       total_price: 15000 + 28000 + 3000,
       is_active: true,
     },
     {
       title: 'Прага: сказка на Влтаве',
-      country: 'Чехия',
-      city: 'Прага',
-      nights: 6,
-      rating: 4.6,
-      image: '/images/tour-prague.jpg',
       description: 'Карлов мост на рассвете, Пражский град, Староместская площадь и дегустация чешского пива.',
-      flight_info: 'Москва → Прага, 3ч 10мин, прямой',
+      image: '/images/tour-prague.jpg',
+      rating: 4.6,
+      nights: 6,
+      // Перелёт
+      departure_city: 'Москва',
+      destination_country: 'Чехия',
+      destination_city: 'Прага',
+      departure_at: '2027-07-05 06:20',
+      arrival_at: '2027-07-05 09:30',
+      flight_duration: '3ч 10мин',
+      flight_class: 'comfort',
       flight_price: 18000,
+      // Отель
       hotel_name: 'Prague Castle View',
       hotel_stars: 3,
-      hotel_info: '10 мин пешком до Староместской площади',
+      hotel_meal: 'RO',
       hotel_price: 22000,
-      transfer_info: 'Трансфер аэропорт–отель с табличкой',
+      // Трансфер
+      transfer_type: 'private',
       transfer_price: 4000,
       total_price: 18000 + 22000 + 4000,
       is_active: true,
     },
     {
-      title: 'Стамбул: экзотика и роскошь',
-      country: 'Турция',
-      city: 'Анталья',
-      nights: 10,
-      rating: 4.9,
-      image: '/images/tour-antalya.jpg',
+      title: 'Анталья: экзотика и роскошь',
       description: 'Пляжный отдых пятизвёздочного уровня: собственный пляж, аквапарк и SPA-центр.',
-      flight_info: 'Москва → Анталья, 4ч 10мин, прямой',
+      image: '/images/tour-antalya.jpg',
+      rating: 4.9,
+      nights: 10,
+      // Перелёт
+      departure_city: 'Москва',
+      destination_country: 'Турция',
+      destination_city: 'Анталья',
+      departure_at: '2027-07-15 05:50',
+      arrival_at: '2027-07-15 10:00',
+      flight_duration: '4ч 10мин',
+      flight_class: 'business',
       flight_price: 12000,
+      // Отель
       hotel_name: 'Rixos Premium',
       hotel_stars: 5,
-      hotel_info: 'Первая линия, Ultra All Inclusive',
+      hotel_meal: 'AI',
       hotel_price: 65000,
-      transfer_info: 'VIP-трансфер аэропорт–отель',
+      // Трансфер
+      transfer_type: 'private',
       transfer_price: 5000,
       total_price: 12000 + 65000 + 5000,
       is_active: true,
     },
     {
       title: 'Санкт-Петербург: белые ночи',
-      country: 'Россия',
-      city: 'Санкт-Петербург',
-      nights: 4,
-      rating: 4.5,
-      image: '/images/tour-spb.jpg',
       description: 'Эрмитаж, Петергоф, прогулка по Невскому проспекту и разводные мосты.',
-      flight_info: 'Москва → Санкт-Петербург, 1ч 25мин, прямой',
+      image: '/images/tour-spb.jpg',
+      rating: 4.5,
+      nights: 4,
+      // Перелёт
+      departure_city: 'Москва',
+      destination_country: 'Россия',
+      destination_city: 'Санкт-Петербург',
+      departure_at: '2027-06-20 10:00',
+      arrival_at: '2027-06-20 11:25',
+      flight_duration: '1ч 25мин',
+      flight_class: 'economy',
       flight_price: 5500,
+      // Отель
       hotel_name: 'Националь',
       hotel_stars: 4,
-      hotel_info: 'Центр, 5 мин до Невского проспекта',
+      hotel_meal: 'HB',
       hotel_price: 24000,
-      transfer_info: 'Трансфер ж/д вокзал–отель',
+      // Трансфер
+      transfer_type: 'bus',
       transfer_price: 2000,
       total_price: 5500 + 24000 + 2000,
       is_active: true,
     },
   ];
 
-  // Тот же принцип, что и с пользователями: 17 колонок = 17 мест $1..$17
+  // Тот же принцип, что и с пользователями: 18 колонок = 18 мест $1..$18
   const insertTourSQL = `
     INSERT INTO tours (
-      title, country, city, nights, rating, image, description,
-      flight_info, flight_price, hotel_name, hotel_stars, hotel_info,
-      hotel_price, transfer_info, transfer_price, total_price, is_active
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      title, description, image, rating, nights,
+      departure_city, destination_country, destination_city,
+      departure_at, arrival_at, flight_duration, flight_class, flight_price,
+      hotel_name, hotel_stars, hotel_meal, hotel_price,
+      transfer_type, transfer_price,
+      total_price, is_active
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
   `;
 
   for (const t of tours) {
-    // Порядок значений в массиве обязан совпадать с порядком $1..$17 выше,
-    // иначе данные встанут не в те колонки.
+    // Порядок значений в массиве обязан совпадать с порядком $1..$21 выше
     await pool.query(insertTourSQL, [
-      t.title, t.country, t.city, t.nights, t.rating, t.image, t.description,
-      t.flight_info, t.flight_price, t.hotel_name, t.hotel_stars, t.hotel_info,
-      t.hotel_price, t.transfer_info, t.transfer_price, t.total_price, t.is_active,
+      t.title, t.description, t.image, t.rating, t.nights,
+      t.departure_city, t.destination_country, t.destination_city,
+      t.departure_at, t.arrival_at, t.flight_duration, t.flight_class, t.flight_price,
+      t.hotel_name, t.hotel_stars, t.hotel_meal, t.hotel_price,
+      t.transfer_type, t.transfer_price,
+      t.total_price, t.is_active,
     ]);
     console.log(`✅ Создан тур: ${t.title}`);
   }
