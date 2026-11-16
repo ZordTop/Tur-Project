@@ -1,45 +1,116 @@
 <%- include('partials/header') %>
 
-<section class="section">
+<%
+  // Собираем список ошибок: бэкенд отдаёт error (строку),
+  // на будущее поддерживаем и errors (строку, массив или объект полей).
+  const errorMessages = [];
+  if (typeof error !== 'undefined' && error) {
+    errorMessages.push(error);
+  }
+  if (typeof errors !== 'undefined' && errors) {
+    if (Array.isArray(errors)) {
+      errors.forEach((e) => { if (e) errorMessages.push(e); });
+    } else if (typeof errors === 'object') {
+      Object.values(errors).forEach((v) => {
+        if (Array.isArray(v)) v.forEach((x) => { if (x) errorMessages.push(x); });
+        else if (v) errorMessages.push(v);
+      });
+    } else {
+      errorMessages.push(errors);
+    }
+  }
+%>
+
+<section class="section auth">
   <div class="container">
-    <h1 class="page-title">Вход</h1>
-
-    <% if (error) { %>
-      <div class="alert alert--error">
-        <%= error %>
-      </div>
-    <% } %>
-
-    <form method="post" action="/auth/login" class="form">
-      <div class="form__group">
-        <label class="form__label" for="email">Email</label>
-        <input
-          class="form__input"
-          type="email"
-          id="email"
-          name="email"
-          placeholder="you@example.com"
-          required
-        >
+    <div class="auth-card">
+      <div class="auth-card__header">
+        <span class="logo__mark auth-card__logo">Т</span>
+        <h1 class="auth-card__title">Вход в аккаунт</h1>
+        <p class="auth-card__subtitle">Войдите, чтобы бронировать туры и видеть свои заявки</p>
       </div>
 
-      <div class="form__group">
-        <label class="form__label" for="password">Пароль</label>
-        <input
-          class="form__input"
-          type="password"
-          id="password"
-          name="password"
-          placeholder="••••••••"
-          required
-        >
-      </div>
+      <% if (errorMessages.length > 0) { %>
+        <div class="alert alert--error auth-card__alert" role="alert">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <div>
+            <% if (errorMessages.length === 1) { %>
+              <%= errorMessages[0] %>
+            <% } else { %>
+              <ul class="alert__list">
+                <% errorMessages.forEach((msg) => { %>
+                  <li><%= msg %></li>
+                <% }) %>
+              </ul>
+            <% } %>
+          </div>
+        </div>
+      <% } %>
 
-      <div class="form__actions">
-        <button class="btn btn--primary" type="submit">Войти</button>
-        <a class="btn btn--secondary" href="/auth/register">Нет аккаунта?</a>
-      </div>
-    </form>
+      <form method="post" action="/login" class="form auth-card__form">
+        <% // Бэкенд читает req.body.next и возвращает туда после входа %>
+        <% if (typeof next !== 'undefined' && next) { %>
+          <input type="hidden" name="next" value="<%= next %>">
+        <% } %>
+
+        <div class="form__group">
+          <label class="form__label" for="email">Email</label>
+          <input
+            class="form__input"
+            type="email"
+            id="email"
+            name="email"
+            placeholder="you@example.com"
+            autocomplete="email"
+            maxlength="255"
+            required
+          >
+        </div>
+
+        <div class="form__group">
+          <label class="form__label" for="password">Пароль</label>
+          <div class="form__field">
+            <input
+              class="form__input"
+              type="password"
+              id="password"
+              name="password"
+              placeholder="••••••••"
+              autocomplete="current-password"
+              minlength="8"
+              maxlength="72"
+              required
+            >
+            <button
+              class="form__toggle"
+              type="button"
+              data-toggle-password="password"
+              aria-label="Показать пароль"
+              aria-pressed="false"
+            >
+              <svg class="form__toggle-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+              <svg class="form__toggle-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form__actions">
+          <button class="btn btn--primary btn--block" type="submit">Войти</button>
+        </div>
+      </form>
+
+      <p class="auth-card__footer">
+        Нет аккаунта? <a href="/register">Зарегистрируйтесь</a>
+      </p>
+    </div>
   </div>
 </section>
 

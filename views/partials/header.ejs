@@ -6,7 +6,12 @@
   <title><%= typeof title !== 'undefined' ? title : 'Туристический сайт' %></title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
+<%
+  // Класс роли на <body> для визуального разделения интерфейсов:
+  // витрина клиента, терминал менеджера и админ-панель выглядят по-разному
+  const _role = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.role : 'guest';
+%>
+<body class="role-<%= _role %>">
   <header class="header">
     <div class="container header__inner">
       <a class="logo" href="/">
@@ -19,9 +24,58 @@
       </button>
 
       <nav class="nav" id="nav">
+        <!-- Основные ссылки (всегда) -->
         <a class="nav__link" href="/">Главная</a>
         <a class="nav__link" href="/tours">Туры</a>
         <a class="nav__link" href="/about">О нас</a>
+
+        <% if (typeof currentUser === 'undefined' || !currentUser) { %>
+          <!-- Гость: Войти + Регистрация -->
+          <div class="nav__actions">
+            <a class="btn btn--sm btn--secondary" href="/login">Войти</a>
+            <a class="btn btn--sm btn--primary" href="/register">Регистрация</a>
+          </div>
+
+        <% } else if (currentUser.role === 'user') { %>
+          <!-- Клиент: Мои брони + имя + Выйти -->
+          <a class="nav__link" href="/profile">Мои брони</a>
+          <div class="nav__actions">
+            <div class="user-menu">
+              <span class="user-menu__avatar"><%= currentUser.full_name.charAt(0) %></span>
+              <span class="user-menu__name"><%= currentUser.full_name %></span>
+            </div>
+            <form method="post" action="/logout">
+              <button class="btn btn--sm btn--danger" type="submit">Выйти</button>
+            </form>
+          </div>
+
+        <% } else if (currentUser.role === 'manager') { %>
+          <!-- Менеджер: Кабинет менеджера + Выйти -->
+          <div class="nav__actions">
+            <a class="btn btn--sm btn--accent" href="/manager">Кабинет менеджера</a>
+            <div class="user-menu">
+              <span class="user-menu__avatar"><%= currentUser.full_name.charAt(0) %></span>
+              <span class="user-menu__name"><%= currentUser.full_name %></span>
+            </div>
+            <form method="post" action="/logout">
+              <button class="btn btn--sm btn--danger" type="submit">Выйти</button>
+            </form>
+          </div>
+
+        <% } else if (currentUser.role === 'admin') { %>
+          <!-- Админ: Админ-панель + Кабинет менеджера + Выйти -->
+          <div class="nav__actions">
+            <a class="btn btn--sm btn--primary" href="/admin">Админ-панель</a>
+            <a class="btn btn--sm btn--accent" href="/manager">Кабинет менеджера</a>
+            <div class="user-menu">
+              <span class="user-menu__avatar"><%= currentUser.full_name.charAt(0) %></span>
+              <span class="user-menu__name"><%= currentUser.full_name %></span>
+            </div>
+            <form method="post" action="/logout">
+              <button class="btn btn--sm btn--danger" type="submit">Выйти</button>
+            </form>
+          </div>
+        <% } %>
       </nav>
     </div>
   </header>
