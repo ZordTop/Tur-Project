@@ -11,6 +11,10 @@
     <% } %>
 
     <form method="post" action="/auth/login" class="form">
+      <% if (typeof nextUrl !== 'undefined' && nextUrl) { %>
+        <input type="hidden" name="next" value="<%= nextUrl %>">
+      <% } %>
+
       <div class="form__group">
         <label class="form__label" for="email">Email</label>
         <input

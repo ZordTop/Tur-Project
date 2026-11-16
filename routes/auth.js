@@ -16,6 +16,27 @@ function homeFor(role) {
   return '/tours';
 }
 
+// Куда хотел попасть гость, прежде чем requireAuth отправил его на /login?next=...
+// Берём только внутренние пути: '/' и '//host' (протокол-опускающий редирект) отсекаем,
+// иначе форма входа превратилась бы в открытую дверь для редиректа на чужой сайт.
+function safeNext(raw) {
+  if (typeof raw !== 'string') return '';
+  if (!raw.startsWith('/') || raw.startsWith('//')) return '';
+  return raw;
+}
+
+// Один и тот же набор переменных для рендера формы входа — чтобы next
+// не терялся и при ошибке (неверный пароль, блокировка).
+// При POST значение приходит из скрытого поля формы, при GET — из query-строки.
+function loginRenderData(req, error) {
+  const raw = (req.body && req.body.next) || req.query.next;
+  return {
+    title: 'Вход — Туристический сайт',
+    error,
+    nextUrl: safeNext(raw),
+  };
+}
+
 // GET /auth/register — форма регистрации
 router.get('/register', (req, res) => {
   if (res.locals.currentUser) {
@@ -83,7 +104,7 @@ router.get('/login', (req, res) => {
   if (res.locals.currentUser) {
     return res.redirect(homeFor(res.locals.currentUser.role));
   }
-  res.render('login', { title: 'Вход — Туристический сайт', error: null });
+  res.render('login', loginRenderData(req, null));
 });
 
 // POST /auth/login — проверка email/password_hash и is_blocked
@@ -94,10 +115,7 @@ router.post('/login', async (req, res, next) => {
     if (!email || !password) {
       return res
         .status(400)
-        .render('login', {
-          title: 'Вход — Туристический сайт',
-          error: 'Введите email и пароль',
-        });
+        .render('login', loginRenderData(req, 'Введите email и пароль'));
     }
 
     const result = await pool.query(
@@ -109,10 +127,7 @@ router.post('/login', async (req, res, next) => {
     if (result.rows.length === 0) {
       return res
         .status(401)
-        .render('login', {
-          title: 'Вход — Туристический сайт',
-          error: 'Неверный email или пароль',
-        });
+        .render('login', loginRenderData(req, 'Неверный email или пароль'));
     }
 
     const user = result.rows[0];
@@ -121,20 +136,14 @@ router.post('/login', async (req, res, next) => {
     if (user.is_blocked) {
       return res
         .status(403)
-        .render('login', {
-          title: 'Вход — Туристический сайт',
-          error: 'Аккаунт заблокирован. Обратитесь к администратору',
-        });
+        .render('login', loginRenderData(req, 'Аккаунт заблокирован. Обратитесь к администратору'));
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       return res
         .status(401)
-        .render('login', {
-          title: 'Вход — Туристический сайт',
-          error: 'Неверный email или пароль',
-        });
+        .render('login', loginRenderData(req, 'Неверный email или пароль'));
     }
 
     // В сессии хранится только id: данные и статус блокировки всегда актуальны из БД

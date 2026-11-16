@@ -19,8 +19,8 @@
           <tr>
             <td><%= t.id %></td>
             <td><%= t.title %></td>
-            <td><%= t.country %></td>
-            <td><%= t.city %></td>
+            <td><%= t.destination_country %></td>
+            <td><%= t.destination_city %></td>
             <td><%= t.nights %></td>
             <td><%= t.total_price.toLocaleString('ru-RU') %> ₽</td>
           </tr>
@@ -46,7 +46,7 @@
             <td><%= b.client_name %></td>
             <td><%= b.client_phone %></td>
             <td><%= b.status %></td>
-            <td><%= b.created_at %></td>
+            <td><%= b.created_at.toLocaleString('ru-RU') %></td>
           </tr>
           <% }) %>
         </tbody>

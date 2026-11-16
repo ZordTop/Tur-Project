@@ -468,6 +468,247 @@ a:hover {
   color: #fff;
 }
 
+/* ===== Авторизация в шапке ===== */
+
+.nav__auth {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.nav__auth__name {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.nav__link--auth {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.nav__auth__form {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.nav__auth__form button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.nav__auth__form button:hover {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+/* ===== Формы ===== */
+
+.form {
+  max-width: 420px;
+  padding: 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.form__group {
+  margin-bottom: 16px;
+}
+
+.form__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.form__input {
+  width: 100%;
+  padding: 11px 14px;
+  font: inherit;
+  color: var(--color-text);
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.form__input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.15);
+}
+
+.form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 20px;
+}
+
+/* ===== Оповещения ===== */
+
+.alert {
+  max-width: 420px;
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+
+.alert--error {
+  color: #8c1d18;
+  background: #fdecea;
+  border: 1px solid #f5c2c0;
+}
+
+/* ===== Админ-таблицы ===== */
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  font-size: 0.95rem;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-table thead th {
+  background: #f1f4f9;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ===== Кнопки ===== */
+
+.btn--secondary {
+  background: #fff;
+  color: var(--color-primary);
+  border-color: var(--color-border);
+}
+
+.btn--secondary:hover {
+  background: #f7f8fa;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn--sm {
+  padding: 8px 14px;
+  font-size: 0.9rem;
+}
+
+/* ===== Фильтры каталога ===== */
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+  align-items: end;
+  padding: 20px;
+  margin-bottom: 32px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.filters__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filters__label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.filters__input {
+  width: 100%;
+  padding: 9px 12px;
+  font: inherit;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text);
+}
+
+.filters__input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.15);
+}
+
+.filters__actions {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+/* ===== Пустое состояние и результаты ===== */
+
+.empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--color-muted);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+}
+
+.empty a {
+  color: var(--color-primary);
+}
+
+.results-count {
+  margin: 0 0 20px;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
+.card__hotel {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+/* ===== Подсказка цены ===== */
+
+.tour__price-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--color-muted);
+}
+
 /* ===== Адаптив ===== */
 @media (max-width: 860px) {
   .tour {
@@ -512,6 +753,41 @@ a:hover {
 
   .section {
     padding: 44px 0;
+  }
+
+  .nav__auth {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    width: 100%;
+    padding-top: 8px;
+    margin-top: 4px;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .nav__auth__name {
+    padding: 8px 0 4px;
+  }
+
+  .nav__auth .nav__link {
+    width: 100%;
+    display: block;
+  }
+
+  .nav__auth__form {
+    width: 100%;
+  }
+
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .filters__actions {
+    margin-top: 4px;
+  }
+
+  .filters__actions .btn {
+    flex: 1;
   }
 
   .tour__row {

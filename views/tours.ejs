@@ -5,27 +5,117 @@
     <h1 class="page-title">Наши туры</h1>
     <p class="page-subtitle">Стоимость указана за одного человека и включает рейс, проживание и трансферы.</p>
 
-    <div class="cards">
-      <% tours.forEach((tour) => { %>
-        <article class="card">
-          <div class="card__image">
-            <img src="<%= tour.image %>" alt="<%= tour.title %>" loading="lazy">
-          </div>
-          <div class="card__body">
-            <p class="card__meta"><%= tour.country %> · <%= tour.city %> · <%= tour.nights %> ночей</p>
-            <h2 class="card__title">
-              <a href="/tours/<%= tour.id %>"><%= tour.title %></a>
-            </h2>
-            <p class="card__text"><%= tour.description %></p>
-            <div class="card__footer">
-              <span class="card__price"><%= tour.price.toLocaleString('ru-RU') %> ₽</span>
-              <span class="card__rating">Рейтинг <%= tour.rating %></span>
+    <!--
+      Форма фильтров: method="get", поэтому условия попадают в query-строку
+      (/tours?country=Турция&maxPrice=60000) и ссылку можно скопировать.
+      Названия полей совпадают с parseFilters() в routes/tours.js.
+      Значения подставляются из filters, чтобы после поиска форма показывала
+      то, что уже выбрано, а не пустые поля.
+    -->
+    <form class="filters" method="get" action="/tours">
+      <div class="filters__field">
+        <label class="filters__label" for="country">Страна</label>
+        <select class="filters__input" id="country" name="country">
+          <option value="">Любая</option>
+          <% countries.forEach((country) => { %>
+            <option value="<%= country %>" <%= filters.country === country ? 'selected' : '' %>>
+              <%= country %>
+            </option>
+          <% }) %>
+        </select>
+      </div>
+
+      <div class="filters__field">
+        <label class="filters__label" for="city">Город или курорт</label>
+        <input
+          class="filters__input"
+          type="text"
+          id="city"
+          name="city"
+          placeholder="Напр. Сочи"
+          value="<%= filters.city || '' %>"
+        >
+      </div>
+
+      <div class="filters__field">
+        <label class="filters__label" for="maxPrice">Цена до, ₽</label>
+        <input
+          class="filters__input"
+          type="number"
+          id="maxPrice"
+          name="maxPrice"
+          min="0"
+          step="1000"
+          placeholder="Любая"
+          value="<%= filters.maxPrice !== null ? filters.maxPrice : '' %>"
+        >
+      </div>
+
+      <div class="filters__field">
+        <label class="filters__label" for="nights">Ночей не меньше</label>
+        <input
+          class="filters__input"
+          type="number"
+          id="nights"
+          name="nights"
+          min="1"
+          step="1"
+          placeholder="Любое"
+          value="<%= filters.nights !== null ? filters.nights : '' %>"
+        >
+      </div>
+
+      <div class="filters__field">
+        <label class="filters__label" for="hotelStars">Отель от</label>
+        <select class="filters__input" id="hotelStars" name="hotelStars">
+          <option value="">Любых звёзд</option>
+          <% [2, 3, 4, 5].forEach((stars) => { %>
+            <option value="<%= stars %>" <%= filters.hotelStars === stars ? 'selected' : '' %>>
+              <%= stars %>★ и выше
+            </option>
+          <% }) %>
+        </select>
+      </div>
+
+      <div class="filters__actions">
+        <button class="btn btn--primary" type="submit">Найти</button>
+        <a class="btn btn--secondary" href="/tours">Сбросить</a>
+      </div>
+    </form>
+
+    <% if (tours.length === 0) { %>
+      <p class="empty">
+        По выбранным условиям туров не нашлось. Попробуйте убрать часть фильтров
+        или <a href="/tours">посмотреть весь каталог</a>.
+      </p>
+    <% } else { %>
+      <p class="results-count">Найдено туров: <%= tours.length %></p>
+
+      <div class="cards">
+        <% tours.forEach((tour) => { %>
+          <article class="card">
+            <div class="card__image">
+              <img src="<%= tour.image %>" alt="<%= tour.title %>" loading="lazy">
             </div>
-            <a class="btn btn--primary btn--block" href="/tours/<%= tour.id %>">Подробнее</a>
-          </div>
-        </article>
-      <% }) %>
-    </div>
+            <div class="card__body">
+              <p class="card__meta">
+                <%= tour.destination_country %> · <%= tour.destination_city %> · <%= tour.nights %> ночей
+              </p>
+              <h2 class="card__title">
+                <a href="/tours/<%= tour.id %>"><%= tour.title %></a>
+              </h2>
+              <p class="card__text"><%= tour.description %></p>
+              <p class="card__hotel"><%= tour.hotel_stars %>★ <%= tour.hotel_name %></p>
+              <div class="card__footer">
+                <span class="card__price"><%= tour.total_price.toLocaleString('ru-RU') %> ₽</span>
+                <span class="card__rating">Рейтинг <%= tour.rating %></span>
+              </div>
+              <a class="btn btn--primary btn--block" href="/tours/<%= tour.id %>">Подробнее</a>
+            </div>
+          </article>
+        <% }) %>
+      </div>
+    <% } %>
   </div>
 </section>
 

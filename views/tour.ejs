@@ -10,22 +10,41 @@
       </div>
 
       <div class="tour__content">
-        <p class="card__meta"><%= tour.country %> · <%= tour.city %></p>
+        <p class="card__meta"><%= tour.destination_country %> · <%= tour.destination_city %></p>
         <h1 class="page-title"><%= tour.title %></h1>
         <p class="page-subtitle"><%= tour.description %></p>
 
+        <!--
+          Поля ниже — колонки таблицы tours (см. DATA_CONTRACT.md, п. 2).
+          Подписи кодов (economy/BB/bus) приходят из routes/tours.js:
+          flightClassLabel, mealLabel, transferLabel.
+        -->
         <dl class="tour__details">
           <div class="tour__row">
             <dt>Перелёт</dt>
-            <dd><%= tour.flight %></dd>
+            <dd>
+              <%= tour.departure_city %> → <%= tour.destination_city %>,
+              <%= flightClassLabel %>, в пути <%= tour.flight_duration %>
+            </dd>
+          </div>
+          <div class="tour__row">
+            <dt>Вылет</dt>
+            <dd><%= tour.departure_at.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) %></dd>
+          </div>
+          <div class="tour__row">
+            <dt>Прилёт</dt>
+            <dd><%= tour.arrival_at.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) %></dd>
           </div>
           <div class="tour__row">
             <dt>Проживание</dt>
-            <dd><%= tour.hotel %></dd>
+            <dd>
+              <%= tour.hotel_name %>, <%= tour.hotel_stars %>★,
+              <%= tour.destination_city %> — <%= mealLabel %>
+            </dd>
           </div>
           <div class="tour__row">
             <dt>Трансфер</dt>
-            <dd><%= tour.transfer %></dd>
+            <dd><%= transferLabel %></dd>
           </div>
           <div class="tour__row">
             <dt>Длительность</dt>
@@ -38,7 +57,14 @@
         </dl>
 
         <div class="tour__footer">
-          <span class="tour__price"><%= tour.price.toLocaleString('ru-RU') %> ₽</span>
+          <div>
+            <span class="tour__price"><%= tour.total_price.toLocaleString('ru-RU') %> ₽</span>
+            <span class="tour__price-note">
+              Перелёт <%= tour.flight_price.toLocaleString('ru-RU') %> ₽ ·
+              Отель <%= tour.hotel_price.toLocaleString('ru-RU') %> ₽ ·
+              Трансфер <%= tour.transfer_price.toLocaleString('ru-RU') %> ₽
+            </span>
+          </div>
           <button class="btn btn--primary" type="button" data-book="<%= tour.id %>">Забронировать</button>
         </div>
       </div>
