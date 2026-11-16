@@ -1,5 +1,6 @@
 # Полный анализ репозитория Tur-Project
 
+> Последнее обновление: 2026-11-16
 
 ---
 
@@ -9,59 +10,59 @@
 Tur-Project/
 ├── .dockerignore              # Исключения из Docker-образа
 ├── .gitignore                 # Исключения из Git
-├── DATA_CONTRACT.md           # Контракт данных для будущей БД (users, tours, bookings)
-├── docker-compose.yml         # Production-конфиг Docker Compose
-├── docker-compose.dev.yml     # Оверрайд для режима разработки
-├── Dockerfile                 # Инструкция сборки Docker-образа
-├── package.json               # Метаданные проекта и скрипты
-├── package-lock.json          # Lock-файл (фиксированные версии зависимостей)
-├── PROJECT_ANALYSIS.md        # Этот файл — отчёт по репозиторию
-├── README.md                  # Краткое описание для GitHub
+├── DATA_CONTRACT.md           # Контракт данных (реализован в БД)
+├── docker-compose.yml         # Production: приложение + PostgreSQL
+├── docker-compose.dev.yml     # Оверрайд для разработки
+├── Dockerfile                 # Сборка образа (node:20-alpine)
+├── package.json               # 5 production-зависимостей
+├── package-lock.json          # Фиксация версий
+├── PROJECT_ANALYSIS.md        # Этот отчёт
+├── README.md                  # Описание для GitHub
 │
-├── server.js                  # Точка входа: инициализация Express-сервера
+├── server.js                  # Точка входа (сессии, auth, /admin, /manager)
+│
+├── db/                        # Работа с PostgreSQL
+│   ├── pool.js                # Пул соединений pg (DATABASE_URL)
+│   ├── init.js                # CREATE TABLE users/tours/bookings + индексы
+│   └── seed.js                # 3 тестовых пользователя + 5 туров
+│
+├── middlewares/               # Middleware-функции
+│   └── auth.js                # attachCurrentUser, requireAuth, requireRole, dropSession
 │
 ├── routes/
-│   ├── index.js               # Маршруты: /, /healthz, /about
-│   └── tours.js               # Маршруты: /tours, /tours/:id
+│   ├── index.js               # /, /healthz, /about
+│   ├── tours.js               # /tours (POSTGRESQL + фильтры), /tours/:id
+│   └── auth.js                # /auth/login, /auth/register, /auth/logout, /auth/me
 │
 ├── data/
-│   └── tours.js               # Данные туров (массив в памяти + findTourById)
+│   └── tours.js               # Массив в памяти (НЕ используется — legacy)
 │
 ├── views/
-│   ├── index.ejs              # Главная страница
-│   ├── tours.ejs              # Список всех туров
-│   ├── tour.ejs               # Детальная страница одного тура
-│   ├── about.ejs              # Страница «О нас»
-│   ├── 404.ejs                # Страница «Не найдено»
-│   ├── error.ejs              # Страница «Внутренняя ошибка»
-│   │
+│   ├── index.ejs              # Главная
+│   ├── tours.ejs              # Список туров + фильтры
+│   ├── tour.ejs               # Детальная страница тура
+│   ├── about.ejs              # О нас
+│   ├── login.ejs              # Форма входа (+ hidden next)
+│   ├── register.ejs           # Форма регистрации
+│   ├── admin.ejs              # Панель админа
+│   ├── manager.ejs            # Панель менеджера
+│   ├── 404.ejs                # Не найдено
+│   ├── error.ejs              # Ошибка сервера
 │   └── partials/
-│       ├── header.ejs         # Общий <head> + шапка + навигация
-│       └── footer.ejs         # Подвал + подключение main.js
+│       ├── header.ejs         # Шапка + навигация (вкл. авторизация)
+│       └── footer.ejs         # Подвал + подключение JS
 │
 ├── public/
 │   ├── css/
-│   │   └── style.css          # Все стили (~520 строк, CSS-переменные, адаптив)
-│   │
+│   │   └── style.css          # ~800 строк (базовые + формы, фильтры, auth, таблицы)
 │   ├── js/
-│   │   └── main.js            # Клиентский JS (бургер-меню, подсветка ссылок,
-│   │                            заглушка бронирования)
-│   │
-│   └── images/
-│       ├── .gitkeep
-│       ├── 1.webp
-│       ├── 2.jpg
-│       ├── 4.jpg
-│       ├── 5.jpg
-│       ├── 6.webp
-│       ├── 7.webp
-│       ├── 8.jpg
-│       ├── 9.jpg
-│       └── luchshie_oteli_Karelii.jpg
-│       (10 файлов: 9 изображений + .gitkeep)
+│   │   └── main.js            # 44 строки (бургер, подсветка, заглушка бронирования)
+│   └── images/                # Файлы изображений (пути в данных не совпадают)
+│
+└── PROJECT_ANALYSIS_OLD.md    # Резервная копия предыдущего анализа
 ```
 
-**Итого:** 33 файла (без `.git` и без этого отчёта), из них 14 файлов кода (JS / EJS / CSS) — 953 строки, 10 файлов в `images/` (9 изображений + .gitkeep).
+**Итого:** ~33 файла кода (JS / EJS / CSS), 10 файлов в images/, 2 Docker-файла, 3 файла БД.
 
 ---
 
@@ -69,27 +70,27 @@ Tur-Project/
 
 ### 2.1 `server.js` — Точка входа
 
-**Назначение:** Создаёт Express-приложение, подключает маршруты, статику, шаблонизатор, настраивает обработчики ошибок и корректного завершения.
+**Назначение:** Создаёт Express-приложение, подключает маршруты, статику, шаблонизатор, сессии, middleware авторизации, панели администратора/менеджера, обработчики ошибок и корректного завершения.
 
-**Детали:**
-- **Зависимости:** `path` (стандартная), `express`, `./routes/index`, `./routes/tours`.
-- **Конфигурация:**
-  - `PORT` — из переменной `process.env.PORT` или `3000`.
-  - `HOST` — из `process.env.HOST` или `'0.0.0.0'` (обязательно внутри контейнера).
-  - Шаблонизатор EJS: файлы лежат в `views/`, расширение `.ejs` подставляется автоматически.
-- **Middleware:**
-  - `express.urlencoded({ extended: false })` — разбор POST-форм.
-  - `express.json()` — разбор JSON-тел запросов.
-  - `express.static()` — раздача статических файлов из `public/`.
-- **Маршруты:**
-  - `app.use('/', indexRouter)` — подключает `routes/index.js`.
-  - `app.use('/tours', toursRouter)` — подключает `routes/tours.js` (все пути начинаются с `/tours`).
-- **404-хендлер:** `app.use((req, res) => ...)` — срабатывает, если ни один маршрут не подошёл (должен быть после всех `app.use()`).
-- **Error-хендлер:** `app.use((err, req, res, next) => ...)` — Express узнаёт его по 4 аргументам. Выводит стек ошибки в консоль и рендерит `error.ejs`.
-- **Запуск:** `app.listen(PORT, HOST, callback)` — выводит адрес в консоль.
-- **Graceful shutdown:** Слушает `SIGTERM` и `SIGINT`, вызывает `server.close()` для завершения активных соединений. Через 10 секунд — принудительный выход (страховка).
+**Зависимости:** `path`, `express`, `express-session`, маршруты (`index`, `tours`, `auth`), middleware (`auth`), `db/pool`.
 
-**Связи:** Подключает `routes/index.js` и `routes/tours.js`. Рендерит шаблоны из `views/`. Раздаёт статику из `public/`.
+**Middleware-слои (в порядке выполнения):**
+1. `express.urlencoded({ extended: false })` — разбор POST-форм.
+2. `express.json()` — разбор JSON-тел запросов.
+3. `express.static('public')` — раздача статики.
+4. `app.set('trust proxy', 1)` — корректная `cookie.secure` за nginx.
+5. `express-session` — сессии на cookie `connect.sid`, secret из `SESSION_SECRET`, maxAge 24ч, `sameSite: 'lax'`.
+6. `attachCurrentUser` — глобальный middleware: при каждом запросе читает пользователя из БД по `req.session.userId`, кладёт в `res.locals.currentUser` (шаблоны) и `req.user` (защита). При `is_blocked = true` или удалённом пользователе — принудительный разлогин.
+7. Подключение маршрутов: `index`, `tours`, `auth` (дважды — по `/auth/*` и алиасам `/login`, `/register`, `/logout`).
+8. Панель админа `GET /admin` — `requireAuth` + `requireRole('admin')`. Загружает все туры, заявки, пользователей.
+9. Панель менеджера `GET /manager` — `requireAuth` + `requireRole('admin','manager')`. Загружает активные туры + последние 20 заявок менеджера.
+10. 404-хендлер — рендер `404.ejs`.
+11. Error-хендлер — рендер `error.ejs`.
+
+**Запуск:** `app.listen(PORT, HOST, callback)`.
+**Graceful shutdown:** Слушает `SIGTERM` и `SIGINT`, вызывает `server.close()`, через 10 секунд — принудительный выход.
+
+**Связи:** Подключает все маршруты, все шаблоны из `views/`, раздает статику из `public/`.
 
 ---
 
@@ -97,939 +98,240 @@ Tur-Project/
 
 **Назначение:** Маршруты для главной страницы, healthcheck и страницы «О нас».
 
-**Маршруты:**
 | Метод | Путь | Действие |
 |-------|------|----------|
-| GET | `/` | Рендер `index.ejs` с заголовком «Главная — Туристический сайт» |
-| GET | `/healthz` | Возвращает JSON: `{ status: 'ok', uptime: Math.round(process.uptime()) }`. Используется Docker healthcheck. |
-| GET | `/about` | Рендер `about.ejs` с заголовком «О нас — Туристический сайт» |
-
-**Зависимости:** `express` (стандартная), `express.Router()`.
-
-**Связи:** Рендерит `views/index.ejs`, `views/about.ejs`.
+| GET | `/` | Рендер `index.ejs` |
+| GET | `/healthz` | JSON: `{ status: 'ok', uptime: Math.round(process.uptime()) }`. Используется Docker healthcheck. |
+| GET | `/about` | Рендер `about.ejs` |
 
 ---
 
-### 2.3 `routes/tours.js`
+### 2.3 `routes/tours.js` — Каталог туров (PostgreSQL + фильтры)
 
-**Назначение:** Маршруты для списка туров и детальной страницы тура.
+**Назначение:** Список активных туров с фильтрами и страница одного тура. Источник данных — таблица `tours` в PostgreSQL.
 
-**Маршруты:**
-| Метод | Путь | Действие |
-|-------|------|----------|
-| GET | `/` | Рендер `tours.ejs` с массивом всех туров (`tours`) и заголовком |
-| GET | `/:id` | Ищет тур по ID через `findTourById()`. Если найден — рендерит `tour.ejs`. Если нет — передаёт управление дальше (`next()`), что приводит к 404. |
+**Словари кодов:** `FLIGHT_CLASS_LABELS` (`economy`→«Эконом» и т.д.), `HOTEL_MEAL_LABELS` (`RO`→«Без питания» и т.д.), `TRANSFER_TYPE_LABELS` (`bus`→«Групповой автобус» и т.д.). Функция `label(dict, code)` разворачивает БД-код в текст.
 
-**Зависимости:** `express`, `../data/tours` (импортирует `tours` и `findTourById`).
+**`parseFilters(query)`:** читает query-строку, возвращает объект `{ country, city, maxPrice, nights, hotelStars }`. Пустые значения → `null`.
 
-**Связи:** Читает данные из `data/tours.js`. Рендерит `views/tours.ejs` и `views/tour.ejs`.
+| Метод | Путь | Защита | Действие |
+|-------|------|--------|----------|
+| GET | `/` | — | Фильтрация по `country`, `city` (ILIKE), `maxPrice` (<=), `nights` (>=), `hotelStars` (>=), `is_active = TRUE`. Сортировка `total_price ASC, id ASC`. В шаблон: `tours`, `countries` (DISTINCT для select), `filters` (для подсветки формы). |
+| GET | `/:id` | — | По `id` + `is_active = TRUE`. Скрытый тур → 404. В шаблон: `tour`, `flightClassLabel`, `mealLabel`, `transferLabel`. |
+
+**Защита от инъекций:** Все фильтры передаются отдельным массивом параметров (`$1`, `$2`...), SQL-текст из query не собирается.
+
+**Валидация `/:id`:** `!Number.isInteger(id) || id <= 0` → сразу 404, до базы не доходит.
 
 ---
 
-### 2.4 `data/tours.js`
+### 2.4 `routes/auth.js` — Авторизация
 
-**Назначение:** «Базы данных» — массив объектов туров и функция поиска.
+| Метод | Путь | Действие |
+|-------|------|----------|
+| GET | `/auth/register` | Форма регистрации (если залогинен — редирект по роли) |
+| POST | `/auth/register` | Валидация (все поля + пароль ≥ 8), bcrypt.hash, INSERT (role='user'), сессия, редирект по роли |
+| GET | `/auth/login` | Форма входа с `nextUrl` (скрытое поле) |
+| POST | `/auth/login` | SELECT по email, is_blocked, bcrypt.compare, `req.session.userId`, редирект: `next` → туда, иначе по роли, 401/403 при ошибке |
+| POST | `/auth/logout` | `dropSession` |
+| GET | `/auth/logout` | `dropSession` |
+| GET | `/auth/me` | JSON `{ user: currentUser }` (без password_hash) |
 
-**Структура объекта тура:**
-```javascript
-{
-  id: Number,           // уникальный идентификатор
-  title: String,        // название тура
-  country: String,      // страна
-  city: String,         // город
-  price: Number,        // цена в рублях
-  nights: Number,       // количество ночей
-  rating: Number,       // рейтинг из 5
-  image: String,        // путь к изображению (относительный)
-  description: String,  // краткое описание
-  flight: String,       // информация о перелёте
-  hotel: String,        // информация об отеле
-  transfer: String      // информация о трансфере
-}
+**`safeNext(raw)`:** разрешает только внутренние пути (`/...`), отбрасывает `//host` (SSRF-редирект).
+**`loginRenderData(req, error)`:** объединяет `error` и `nextUrl` для формы входа.
+
+---
+
+### 2.5 `middlewares/auth.js` — Ролевая защита
+
+| Функция | Назначение |
+|---------|------------|
+| `attachCurrentUser` | Глобальный middleware: читает из БД при каждом запросе. Кладёт в `res.locals.currentUser` и `req.user`. При `is_blocked = true` → разлогин. |
+| `requireAuth` | Если `req.user` нет → 302 на `/login?next=<current_url>`. |
+| `requireRole(...roles)` | Если роль не входит в список → 302 на `/tours?error=access_denied`. |
+| `dropSession` | Уничтожает сессию, чистит cookie, редиректит. |
+
+**Принцип:** в сессии хранится только `userId`. Данные и статус блокировки всегда актуальны из БД.
+
+---
+
+### 2.6 `db/pool.js`
+
+Единственный `Pool` из `pg` на основе `process.env.DATABASE_URL`. Обработчик `pool.on('error')` для логов обрыва соединений.
+
+---
+
+### 2.7 `db/init.js` — Создание таблиц
+
+Идемпотентный скрипт (`CREATE TABLE IF NOT EXISTS`). Три таблицы строго по `DATA_CONTRACT.md`:
+
+- **`users`**: `id`, `email` (UNIQUE), `password_hash`, `full_name`, `phone`, `role` (CHECK: user/manager/admin), `is_blocked`, `created_at`.
+- **`tours`**: `id`, `title`, `description`, `image`, `rating` (CHECK 1.0–5.0), `nights`, `departure_city`, `destination_country`, `destination_city`, `departure_at`, `arrival_at`, `flight_duration`, `flight_class` (CHECK: economy/comfort/business), `flight_price`, `hotel_name`, `hotel_stars` (CHECK: 2/3/4/5), `hotel_meal` (CHECK: RO/BB/HB/AI), `hotel_price`, `transfer_type` (CHECK: bus/private), `transfer_price`, `total_price`, `is_active`.
+- **`bookings`**: `id`, `tour_id` (FK→tours), `user_id` (FK→users, nullable), `manager_id` (FK→users, nullable), `client_name`, `client_phone`, `comment`, `status` (CHECK: new/confirmed/cancelled), `created_at`.
+
+Индексы: `idx_tours_dest_country`, `idx_tours_dest_city`, `idx_tours_total`, `idx_bookings_user`, `idx_bookings_manager`.
+
+---
+
+### 2.8 `db/seed.js` — Тестовые данные
+
+Идемпотентный (проверка `count(*) > 0`). Пароль `TestPass123!`.
+
+**3 пользователя:** `admin@turist.ru` (admin), `manager@turist.ru` (manager), `user@turist.ru` (user).
+**5 туров:** Сочи (7 ночей, 43 000 ₽), Стамбул (5 ночей, 46 000 ₽), Прага (6 ночей, 44 000 ₽), Анталья (10 ночей, 82 000 ₽, бизнес/AI), Санкт-Петербург (4 ночи, 31 500 ₽).
+
+---
+
+### 2.9 `views/partials/header.ejs` — Шапка + навигация
+
+```
+Логотип (Т ТурПроект) | Бургер | Главная · Туры · О нас
 ```
 
-**Тур 1 — Сочи:**
-- `id: 1`, страна: Россия, город: Сочи, цена: 45000 ₽, 7 ночей, рейтинг: 4.7
-- Описание: пляжи, Канатная дорога на Красную Поляну, Олимпийский парк.
-- Перелёт: Москва → Сочи, 2ч 40мин. Отель 4★, 300м до моря. Групповой трансфер.
+**Блок `.nav__auth`** (справа, `margin-left: auto`):
+- **Гость:** «Вход» + «Регистрация» (кнопка).
+- **User:** имя + (admin → «Админка») + (admin/manager → «Кабинет») + «Выход» (POST-форма).
 
-**Тур 2 — Стамбул:**
-- `id: 2`, страна: Турция, город: Стамбул, цена: 62000 ₽, 5 ночей, рейтинг: 4.8
-- Описание: Айя-София, Голубая мечеть, Гранд-базар, Босфор.
-- Перелёт: Москва → Стамбул, 3ч 30мин. Отель 4★, Султанахмет. Индивидуальный трансфер.
-
-**Тур 3 — Прага:**
-- `id: 3`, страна: Чехия, город: Прага, цена: 58000 ₽, 6 ночей, рейтинг: 4.6
-- Описание: Карлов мост, Пражский град, Староместская площадь.
-- Перелёт: Москва → Прага, 3ч 10мин. Отель 3★, центр. Трансфер с табличкой.
-
-**Функция `findTourById(id)`:**
-- Принимает `id`, приводит к `Number`, ищет через `Array.find()`.
-- Возвращает объект тура или `undefined`.
-
-**Связи:** Экспортируется в `routes/tours.js`. Данные используются в `views/tours.ejs` и `views/tour.ejs`.
+Защита: `typeof currentUser !== 'undefined'` — не падает, если БД недоступна и `attachCurrentUser` вызвал `next(err)`.
 
 ---
 
-### 2.5 `views/partials/header.ejs`
+### 2.10 `views/tours.ejs` — Каталог + фильтры
 
-**Назначение:** Общий HTML-каркас для всех страниц.
+**Форма `.filters`** (`method="get"`):
+- `Страна` — `<select>` с `DISTINCT destination_country` из БД.
+- `Город или курорт` — `<input text>` (ILIKE).
+- `Цена до, ₽` — `<input number>` (<=).
+- `Ночей не меньше` — `<input number>` (>=).
+- `Отель от` — `<select>` звёзд (>=).
+- Кнопки: «Найти» / «Сбросить».
 
-**Содержимое:**
-- `<!DOCTYPE html>`, `<html lang="ru">`.
-- `<head>`: charset UTF-8, viewport для мобильных, `<title>` с подстановкой `title` из маршрута, подключение `/css/style.css`.
-- `<body>`:
-  - `<header class="header">` — sticky-шапка.
-    - Логотип: символ «Т» в квадрате + текст «ТурПроект», ссылка на `/`.
-    - Бургер-кнопка (`.burger`): три `<span>` для анимации, атрибуты `aria-label` и `aria-expanded` для доступности.
-    - Навигация (`.nav#nav`): ссылки на `/`, `/tours`, `/about`.
-  - `<main class="main">` — контейнер для содержимого страницы (закрывается в `footer.ejs`).
+**Карточки:** мета (`destination_country · destination_city · nights ночей`), название, описание, `hotel_stars★ hotel_name`, цена (`total_price`), рейтинг.
 
-**Связи:** Подключает `public/css/style.css`. Рендерится в каждой странице через `<%- include('partials/header') %>`.
-
----
-
-### 2.6 `views/partials/footer.ejs`
-
-**Назначение:** Завершающая часть шаблона.
-
-**Содержимое:**
-- Закрывает `</main>`.
-- `<footer class="footer">`:
-  - Копирайт: «© 2026 ТурПроект. Учебный проект.» (год берётся из `new Date().getFullYear()`).
-  - Навигация: ссылки на `/tours` и `/about`.
-- `<script src="/js/main.js"></script>` — подключение клиентского JS.
-- Закрывает `</body></html>`.
-
-**Связи:** Подключает `public/js/main.js`. Рендерится через `<%- include('partials/footer') %>`.
+**Пустое состояние:** `<p class="empty">` + ссылка на весь каталог.
+**Счётчик:** `<p class="results-count">Найдено туров: N</p>`.
 
 ---
 
-### 2.7 `views/index.ejs` — Главная страница
+### 2.11 `views/tour.ejs` — Детальная страница тура
 
-**Структура:**
-1. Hero-секция (`.hero`):
-   - Заголовок: «Туры, в которых всё уже включено».
-   - Подзаголовок: про рейсы, проживание и трансферы.
-   - Кнопки: «Смотреть туры» (ведёт на `/tours`) и «О нас» (ведёт на `/about`).
-2. Секция преимуществ (`.features`):
-   - Три карточки: «Перелёт», «Проживание», «Трансфер» — каждая с заголовком и описанием.
+**Блоки из колонок БД:**
+- Перелёт: `departure_city → destination_city, flightClassLabel, в пути flight_duration`.
+- Вылет / Прилёт — отформатированные даты.
+- Проживание: `hotel_name, hotel_stars★, destination_city — mealLabel`.
+- Трансфер: `transferLabel`.
+- Длительность: `nights ночей`.
+- Рейтинг.
 
-**Связи:** Включает `header.ejs` и `footer.ejs`. Использует CSS-классы из `style.css` (hero, features, btn).
-
----
-
-### 2.8 `views/tours.ejs` — Список туров
-
-**Структура:**
-1. Заголовок: «Наши туры» + подзаголовок.
-2. Сетка карточек (`.cards`): цикл `<% tours.forEach(...) %>`.
-3. Каждая карточка (`.card`):
-   - `.card__image`: `<img>` с `loading="lazy"`, `alt` из названия тура.
-   - `.card__body`:
-     - Мета: страна · город · ночи.
-     - Заголовок с ссылкой на `/tours/<%= tour.id %>`.
-     - Описание.
-     - Футер: цена (`price.toLocaleString('ru-RU')`) и рейтинг.
-     - Кнопка «Подробнее» (ведёт на `/tours/<%= tour.id %>`).
-
-**Связи:** Получает переменную `tours` из `routes/tours.js`. Использует CSS-классы (cards, card).
+**Футер:** `total_price` + разбивка (`flight_price`, `hotel_price`, `transfer_price`). Кнопка «Забронировать» (`data-book`).
 
 ---
 
-### 2.9 `views/tour.ejs` — Детальная страница тура
+### 2.12 `views/admin.ejs` — Панель админа
 
-**Структура:**
-1. Ссылка «← Все туры» на `/tours`.
-2. Статья (`.tour`):
-   - `.tour__image`: изображение тура с `alt`.
-   - `.tour__content`:
-     - Мета: страна · город.
-     - Заголовок (`<h1>`) с названием тура.
-     - Описание.
-     - `.tour__details` — таблица деталей:
-       - Перелёт, Проживание, Трансфер, Длительность, Рейтинг.
-     - `.tour__footer`: цена + кнопка «Забронировать» (`data-book="<%= tour.id %>"`).
-
-**Связи:** Получает переменную `tour` из `routes/tours.js`. Использует CSS-классы (tour, tour__image, tour__details, tour__row, tour__footer).
+Три таблицы:
+1. **Туры:** ID, название, `destination_country`, `destination_city`, `total_price`, `is_active`.
+2. **Заявки:** ID, тур, клиент, телефон, статус, `created_at` (форматирование `toLocaleString`).
+3. **Пользователи:** ID, email, ФИО, роль, `is_blocked`.
 
 ---
 
-### 2.10 `views/about.ejs` — Страница «О нас»
+### 2.13 `views/manager.ejs` — Панель менеджера
 
-**Структура:**
-1. Заголовок: «О нас» + подзаголовок с описанием проекта.
-2. Блок преимуществ (`.features`):
-   - «Прозрачная цена» — без скрытых доплат.
-   - «Проверенные отели» — понятные условия.
-   - «Поддержка» — вопросы до и во время поездки.
-
-**Связи:** Аналогична `index.ejs` — включает header/footer, использует тот же CSS-класс features.
+Приветствие `<%= currentUser.full_name %>`.
+1. **Активные туры:** ID, название, `destination_country`, `destination_city`, ночи, цена.
+2. **Мои заявки:** последние 20, ID, тур, клиент, телефон, статус, `created_at` (форматирование).
 
 ---
 
-### 2.11 `views/404.ejs` — Страница не найдено
+### 2.14 `views/login.ejs` — Форма входа
 
-**Структура:**
-- Код ошибки: «404» (`.error__code`).
-- Заголовок: «Такой страницы нет».
-- Подзаголовок: про устаревшую ссылку или опечатку.
-- Кнопка: «На главную» (ссылка на `/`).
-
-**Связи:** Рендерится из `server.js` в 404-хендлере.
+Поля: email, пароль. **Скрытое поле `<input type="hidden" name="next" value="...">`** — сохраняет `next` при редиректе через `requireAuth`. Выводит `error` при неудаче.
 
 ---
 
-### 2.12 `views/error.ejs` — Страница ошибки
+### 2.15 `views/register.ejs` — Форма регистрации
 
-**Структура:**
-- Код ошибки: `<%= status || 500 %>`.
-- Заголовок: «Что-то пошло не так».
-- Сообщение: `<%= message || 'Внутренняя ошибка сервера.' %>`.
-- Кнопка: «На главную» (ссылка на `/`).
-
-**Связи:** Рендерится из `server.js` в error-хендлере. Получает переменные `status` и `message` из объекта ошибки.
+Поля: email, пароль, ФИО, телефон. Выводит `error` при неудаче.
 
 ---
 
-### 2.13 `public/css/style.css` — Все стили
+### 2.16 `views/404.ejs` и `views/error.ejs`
 
-**Назначение:** Полная стилизация всего сайта (~520 строк).
-
-**CSS-переменные (`:root`):**
-| Переменная | Значение | Назначение |
-|------------|----------|------------|
-| `--color-bg` | `#f7f8fa` | Фон страницы |
-| `--color-surface` | `#ffffff` | Фон карточек |
-| `--color-text` | `#1b1f26` | Основной текст |
-| `--color-muted` | `#6b7280` | Второстепенный текст |
-| `--color-primary` | `#1565c0` | Основной цвет (синий) |
-| `--color-primary-dark` | `#0d47a1` | Тёмный синий (hover) |
-| `--color-border` | `#e3e7ee` | Цвет рамок |
-| `--radius` | `14px` | Скругление |
-| `--shadow` | `0 6px 24px rgba(...)` | Тень карточек |
-| `--container` | `1120px` | Максимальная ширина контента |
-
-**Блоки стилей:**
-1. **Сброс и база:** `box-sizing: border-box`, `body` (flex, min-height: 100vh), изображения, ссылки.
-2. **Контейнер:** `max-width: var(--container)`, центрирование, отступы 20px.
-3. **Шапка (`.header`):** sticky-позиционирование, полупрозрачный фон с `backdrop-filter: blur(8px)`, высота 68px.
-4. **Логотип (`.logo`):** flex с иконкой «Т» в квадрате (34×34px, синий фон).
-5. **Навигация (`.nav`):** flex-ряд, активные ссылки с подчёркиванием.
-6. **Бургер (`.burger`):** скрыт на десктопе, отображается при `max-width: 720px`. Анимация трёх полосок в крестик.
-7. **Кнопки (`.btn`):**
-   - `--primary`: синий фон, белый текст, тёмнеет при hover.
-   - `--ghost`: прозрачный фон, белая рамка (для hero-секции).
-   - `--block`: ширина 100%, для мобильных.
-8. **Hero (`.hero`):** градиент `#0d47a1 → #1565c0 → #26a69a`, padding 84px, белый текст.
-9. **Секции (`.section`):** padding 64px.
-10. **Преимущества (`.features`):** CSS Grid `auto-fit, minmax(240px, 1fr)`, карточки с рамкой и скруглением.
-11. **Карточки туров (`.cards`):** Grid `auto-fill, minmax(300px, 1fr)`. Hover: подъём + усиление тени.
-12. **Страница тура (`.tour`):** Grid 2 колонки (1.1fr 1fr), изображение с aspect-ratio 4:3.
-13. **Таблица деталей (`.tour__row`):** Grid 150px 1fr, разделители.
-14. **Футер тура (`.tour__footer`):** flex, рамка, скругление, цена крупным шрифтом.
-15. **Ошибки (`.error__code`):** 4rem, полупрозрачный.
-16. **Подвал (`.footer`):** тёмный фон `#101826`, padding 28px.
-17. **Адаптив:**
-    - `max-width: 860px`: тур в одну колонку.
-    - `max-width: 720px`: бургер-меню, nav абсолютное позиционирование, уменьшенные padding.
-
-**Связи:** Подключается в `header.ejs` через `<link href="/css/style.css">`. Раздаётся через `express.static('public')`.
+Страницы ошибок. Рендерятся из `server.js`.
 
 ---
 
-### 2.14 `public/js/main.js` — Клиентский JavaScript
+### 2.17 `public/css/style.css` — Стили (~800 строк)
 
-**Назначение:** Интерактивность без перезагрузки страницы (~44 строки).
+**Базовые (521 строка):** CSS-переменные, сброс, контейнер, шапка, логотип, навигация, бургер, кнопки, hero, секции, преимущества, карточки туров, страница тура, подвал, адаптив.
 
-**Функционал:**
-1. **Мобильное меню:**
-   - Слушает клик по `.burger`.
-   - Переключает класс `is-open` у `.nav` и у `.burger`.
-   - Устанавливает `aria-expanded` для доступности.
-2. **Подсветка активного пункта меню:**
-   - Сравнивает `window.location.pathname` с `href` каждой ссылки.
-   - Для `/` — точное совпадение. Для других — `path.startsWith(href)`.
-   - Добавляет класс `is-active`.
-3. **Обработка ошибок картинок:**
-   - Слушает событие `error` на всех `.card__image img` и `.tour__image img`.
-   - При ошибке загрузки — скрывает изображение (`display: none`), остаётся CSS-градиент.
-4. **Кнопка бронирования:**
-   - Слушает клик по `[data-book]`.
-   - Меняет текст на «Заявка отправлена», делает кнопку неактивной.
-   - Выводит `id` тура в консоль. (Серверной части нет.)
-
-**Связи:** Подключается в `footer.ejs`. Использует CSS-классы из `style.css`.
+**Добавлены:**
+- `.nav__auth` — блок авторизации в навигации (`flex`, `margin-left: auto`).
+- `.form` — стилизация форм логина/регистрации (padding, border, shadow, focus).
+- `.form__group`, `.form__label`, `.form__input` — поля формы.
+- `.alert`, `.alert--error` — ошибки регистрации/входа.
+- `.admin-table` — стилизация таблиц админки/менеджера.
+- `.btn--secondary`, `.btn--sm` — вторичные кнопки.
+- `.filters`, `.filters__field`, `.filters__label`, `.filters__input`, `.filters__actions` — форма фильтров каталога.
+- `.empty`, `.results-count` — пустое состояние и счётчик.
+- `.card__hotel`, `.tour__price-note` — доп. блоки в карточках.
+- Мобильные правила для `.nav__auth` (flex-direction: column), `.filters` (grid: 1fr).
 
 ---
 
-### 2.15 `public/images/` — Изображения
+### 2.18 `public/js/main.js` — Клиентский JavaScript (44 строки)
 
-**Содержимое (10 файлов, из них 9 изображений):**
-| Файл | Формат | Вероятное назначение |
-|------|--------|---------------------|
-| `.gitkeep` | — | Заполнитель, чтобы папка сохранялась в git |
-| `1.webp` | WebP | Общее изображение |
-| `2.jpg` | JPEG | Общее изображение |
-| `4.jpg` | JPEG | Общее изображение |
-| `5.jpg` | JPEG | Общее изображение |
-| `6.webp` | WebP | Общее изображение |
-| `7.webp` | WebP | Общее изображение |
-| `8.jpg` | JPEG | Общее изображение |
-| `9.jpg` | JPEG | Общее изображение |
-| `luchshie_oteli_Karelii.jpg` | JPEG | Баннер/фото (Каре́лия) |
-
-**Замечание:** Пути в `data/tours.js` (`/images/tour-sochi.jpg`, `/images/tour-istanbul.jpg`, `/images/tour-prague.jpg`) **не совпадают** с реальными файлами в `public/images/`. Из-за этого изображения туров не отображаются, и JavaScript-код в `main.js` скрывает битые `<img>`, показывая CSS-градиент подложки.
-
----
-
-### 2.16 `package.json` — Метаданные и скрипты
-
-**Поля:**
-| Поле | Значение |
-|------|----------|
-| `name` | `tur-project` |
-| `version` | `1.0.0` |
-| `description` | «Туристический сайт — список туров, рейсы, проживание и трансферы» |
-| `main` | `server.js` |
-| `license` | `ISC` |
-| `keywords` | `tourism`, `travel`, `express`, `ejs` |
-
-**Скрипты:**
-| Скрипт | Команда | Назначение |
-|--------|---------|------------|
-| `start` | `node server.js` | Запуск сервера |
-| `dev` | `node --watch server.js` | Автоперезапуск при изменении |
-| `docker:build` | `docker compose build` | Сборка образа |
-| `docker:up` | `docker compose up -d` | Запуск контейнера |
-| `docker:down` | `docker compose down` | Остановка |
-| `docker:logs` | `docker compose logs -f app` | Просмотр логов |
-| `docker:dev` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build` | Dev-режим |
-
-**Зависимости (production):**
-| Пакет | Диапазон в `package.json` | Установлено (lock) | Назначение |
-|-------|---------------------------|--------------------|-----------|
-| `express` | `^4.19.2` | `4.22.3` | Веб-фреймворк |
-| `ejs` | `^3.1.10` | `3.1.10` | Шаблонизатор |
-
-**Зависимости:** devDependencies отсутствуют. Все пакеты — production.
-
-**Связи:** `package-lock.json` фиксирует точные версии всех транзитивных зависимостей (~70 пакетов, включая `body-parser`, `cookie`, `debug`, `ms`, `accepts`, `content-type`, `send`, `serve-static`, `mime-types` и др.).
-
----
-
-### 2.17 `package-lock.json` — Lock-файл
-
-**Назначение:** Фиксирует точные версии всех зависимостей (прямых и транзитивных) для воспроизводимой сборки через `npm ci`.
-
-**Всего зафиксировано пакетов: 76** (2 прямых + 74 транзитивных).
-
-**Прямые зависимости:**
-- `express@4.22.3`
-- `ejs@3.1.10`
-
-**Транзитивные зависимости Express (основные):**
-`accepts@1.3.8`, `array-flatten@1.1.1`, `body-parser@1.20.9`, `bytes@3.1.2`, `content-disposition@0.5.4`, `content-type@1.0.5`, `cookie@0.7.2`, `cookie-signature@1.0.7`, `debug@2.6.9`, `depd@2.0.0`, `destroy@1.2.0`, `encodeurl@2.0.1`, `escape-html@1.0.3`, `etag@1.8.1`, `finalhandler@1.3.2`, `forwarded@0.2.0`, `fresh@0.5.2`, `http-errors@2.0.1`, `iconv-lite@0.4.24`, `inherits@2.0.4`, `ipaddr.js@1.9.1`, `media-typer@0.3.0`, `merge-descriptors@1.0.3`, `methods@1.1.2`, `mime@1.6.0`, `mime-db@1.52.0`, `mime-types@2.1.35`, `ms@2.0.0`, `negotiator@0.6.3`, `on-finished@2.4.2`, `parseurl@1.3.3`, `path-to-regexp@0.1.13`, `proxy-addr@2.0.8`, `qs@6.16.2`, `range-parser@1.2.1`, `raw-body@2.5.3`, `safe-buffer@5.2.1`, `safer-buffer@2.1.2`, `send@0.19.2`, `serve-static@1.16.3`, `setprototypeof@1.2.0`, `statuses@2.0.2`, `toidentifier@1.0.1`, `type-is@1.6.18`, `unpipe@1.0.0`, `utils-merge@1.0.1`, `vary@1.1.2`.
-
-**Транзитивные зависимости EJS:**
-`jake@10.9.4` (движок сборки файлов для EJS), `async@3.2.6`, `filelist@1.0.6`, `minimatch@5.1.9`, `brace-expansion@2.1.7`, `balanced-match@1.0.2`, `picocolors@1.1.1`.
-
-**Служебные пакеты системы объектов/прототипов** (тянутся через `qs`, `side-channel`, `call-bound` и др.):
-`call-bind-apply-helpers@1.0.2`, `call-bound@1.0.4`, `dunder-proto@1.0.1`, `es-define-property@1.0.1`, `es-errors@1.3.0`, `es-object-atoms@1.1.2`, `function-bind@1.1.2`, `get-intrinsic@1.3.0`, `get-proto@1.0.1`, `gopd@1.2.0`, `has-symbols@1.1.0`, `hasown@2.0.4`, `math-intrinsics@1.1.0`, `object-inspect@1.13.4`, `side-channel@1.1.1`, `side-channel-list@1.0.1`, `side-channel-map@1.0.1`, `side-channel-weakmap@1.0.2`.
-
-**Примечание:** у `send@0.19.2` своя вложенная копия `ms@2.1.3` (в то время как корневая — `ms@2.0.0`) — это нормальное поведение npm при конфликте версий.
-
----
-
-### 2.18 `DATA_CONTRACT.md` — Контракт данных для будущей БД
-
-**Назначение:** Проектный документ, описывающий единую схему данных для перехода от текущего массива в памяти к полноценной базе данных. Согласовывает структуру между фронтендом, бэкендом и админкой.
-
-**Содержит 4 раздела:**
-
-1. **Таблица `users`** (пользователи и права) — 9 полей: `id`, `email`, `password_hash`, `full_name`, `phone`, `role` (`'user'`/`'manager'`/`'admin'`), `is_blocked`, `created_at`.
-
-2. **Таблица `tours`** (пакетные туры) — 18 полей. По сравнению с текущим `data/tours.js` появляются:
-   - Раздельные цены: `flight_price`, `hotel_price`, `transfer_price`, `total_price`.
-   - Расширенная информация: `hotel_name`, `hotel_stars` (для фильтрации).
-   - Флаг `is_active` для скрытия архивных туров.
-   - Поля адаптированы под фильтры поиска (страна, город, цена, ночи, звёзды).
-
-3. **Таблица `bookings`** (заявки на бронирование) — 9 полей: `id`, `tour_id` (FK), `user_id` (FK, nullable), `manager_id` (FK, nullable), `client_name`, `client_phone`, `comment`, `status` (`'new'`/`'confirmed'`/`'cancelled'`), `created_at`.
-
-4. **Контракт маршрутов и переменных для фронтенда (EJS)** — описывает, какие объекты сервер обязуется передавать в `res.render(...)`:
-   - Глобально через `res.locals`: `currentUser`.
-   - `GET /tours` → `tours`, `filters`.
-   - `GET /profile` → `bookings` (новый маршрут).
-   - `GET /manager` → `tours`, `recentBookings` (новый маршрут).
-   - `GET /admin` → `tours`, `bookings`, `users` (новый маршрут).
-
-**Связи:** Пока не реализован в коде — это план на будущее. Текущий `data/tours.js` не соответствует контракту (нет отдельных цен, нет `hotel_name`/`hotel_stars`/`is_active`).
-
----
-
-### 2.19 `README.md` — Описание проекта
-
-**Назначение:** Описание для GitHub, содержит краткий обзор, структуру файлов, команды Docker и без-Docker запуска, таблицу переменных окружения.
-
-**Содержимое (92 строки):**
-- Стек: Node.js 20, Express 4, EJS, Docker / Docker Compose.
-- Структура проекта (базовая, упрощённая).
-- Запуск через Docker (production + dev).
-- Примечание о проблемах с файловой системой Windows в Docker Desktop.
-- Запуск без Docker (`npm install` + `npm start`).
-- Таблица переменных окружения.
-- Проверка состояния через `/healthz`.
+1. **Бургер-меню** — переключает `is-open` у `.nav` и `.burger`.
+2. **Подсветка активного пункта** — `path.startsWith(href)`.
+3. **Обработка ошибок картинок** — скрывает `<img>` при `error`.
+4. **Кнопка бронирования** — заглушка: меняет текст, блокирует кнопку, `console.log`.
 
 ---
 
 ## 3. Docker-инфраструктура
 
-### 3.1 `Dockerfile` — Инструкция сборки
+### 3.1 `Dockerfile`
 
-**Пошаговый разбор:**
-
-```dockerfile
-FROM node:20-alpine          # 1. Базовый образ: Node.js 20 на Alpine (~50MB)
-WORKDIR /app                 # 2. Рабочая папка внутри контейнера
-ENV NODE_ENV=production \    # 3. Переменные по умолчанию
-    PORT=3000
-COPY package.json            # 4. Копируем package.json + lock (слой 1)
-     package-lock.json ./
-RUN npm ci --omit=dev \      # 5. Устанавливаем только prod-зависимости
-     && npm cache clean --force  # (слой 2, переиспользуется при изменении package.json)
-COPY --chown=node:node . .   # 6. Копируем весь код (слой 3)
-USER node                    # 7. Переключаемся на непривилегированного пользователя
-EXPOSE 3000                  # 8. Порт приложения
-HEALTHCHECK ... CMD node ... # 9. Проверка живости через /healthz
-CMD ["node", "server.js"]    # 10. Запуск сервера
+```
+FROM node:20-alpine → WORKDIR /app → COPY package*.json → npm ci --omit=dev → COPY . → USER node → EXPOSE 3000 → HEALTHCHECK /healthz → CMD node server.js
 ```
 
-**Особенности:**
-- Многослойная сборка: `npm ci` выполняется до копирования кода, поэтому слои с зависимостями кэшируются.
-- `--omit=dev` не устанавливает devDependencies.
-- `npm cache clean --force` уменьшает размер образа.
-- `--chown=node:node` меняет владельца файлов.
-- `USER node` — контейнер не работает от root.
-- `HEALTHCHECK` каждые 30 секунд проверяет `/healthz` через `fetch`.
-
----
-
-### 3.2 `docker-compose.yml` — Production
+### 3.2 `docker-compose.yml`
 
 ```yaml
 services:
   app:
-    build:
-      context: .             # Собираем из текущей папки
-    image: tur-project:latest # Имя образа
-    container_name: tur-project-app
-    ports:
-      - "${APP_PORT:-3000}:3000"  # Порт на хосте (через APP_PORT, default 3000)
-    environment:
-      - NODE_ENV=production     # Production-режим
-      - PORT=3000               # Порт внутри контейнера
-    restart: unless-stopped     # Автоперезапуск
-    # healthcheck наследуется из Dockerfile
-```
-
----
-
-### 3.3 `docker-compose.dev.yml` — Режим разработки
-
-```yaml
-services:
-  app:
-    environment:
-      - NODE_ENV=development    # Dev-режим
-      - PORT=3000
-    volumes:
-      - .:/app                  # Монтируем весь проект в контейнер
-      - /app/node_modules       # Перекрываем node_modules (не затираем)
-    command: npm run dev        # node --watch server.js
-```
-
-**Отличия от production:**
-- Исходники монтируются (bind mount), поэтому правки видны сразу.
-- `NODE_ENV=development`.
-- `npm run dev` с `node --watch` — автоперезапуск при изменении `server.js`.
-- Том `/app/node_modules` сохраняет установленные зависимости.
-
-**Запуск dev:**
-```powershell
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
-```
-
-**Запуск production:**
-```powershell
-docker compose up -d --build
-```
-
----
-
-### 3.4 `.dockerignore` — Исключения из образа
-
-**Исключённые файлы/папки:**
-- `node_modules` — зависимости устанавливаются внутри образа.
-- `npm-debug.log*`, `*.log` — логи.
-- `.git`, `.gitignore`, `.vscode`, `.idea` — инструменты разработки.
-- `.env`, `.env.*` — секреты.
-- `Dockerfile`, `Dockerfile.*`, `docker-compose*.yml`, `.dockerignore` — файлы Docker.
-- `*.md` — документация.
-- `tmp`, `temp` — временные файлы.
-
-**Размер образа:** Благодаря Alpine + exclusion — минимальный (~150-200MB).
-
----
-
-### 3.5 `.gitignore` — Исключения из Git
-
-**Исключённые файлы/папки:**
-- `node_modules/` — зависимости (устанавливаются из lock-файла).
-- `logs`, `*.log`, `npm-debug.log*` — логи.
-- `.env`, `.env.local` — переменные окружения.
-- `.npm`, `.cache/`, `.DS_Store`, `Thumbs.db` — кэш и мусор.
-- `.vscode/`, `.idea/` — настройки редакторов.
-- `tmp/`, `temp/` — временные файлы.
-
----
-
-## 4. Функции и их связи
-
-### 4.1 Серверные функции
-
-| Файл | Функция/Экспорт | Описание |
-|------|-----------------|----------|
-| `server.js` | `app.listen()` | Запуск HTTP-сервера на порту 3000. |
-| `server.js` | `shutdown(signal)` | Graceful shutdown по SIGTERM/SIGINT. |
-| `routes/index.js` | `router.get('/', ...)` | Главная страница. |
-| `routes/index.js` | `router.get('/healthz', ...)` | Healthcheck для Docker. |
-| `routes/index.js` | `router.get('/about', ...)` | Страница «О нас». |
-| `routes/tours.js` | `router.get('/', ...)` | Список всех туров. |
-| `routes/tours.js` | `router.get('/:id', ...)` | Детальная страница тура. |
-| `data/tours.js` | `findTourById(id)` | Поиск тура по числовому ID. |
-| `data/tours.js` | `tours` (экспорт) | Массив из 3 объектов туров. |
-
-### 4.2 Клиентские функции (JS)
-
-| Функция | Описание |
-|---------|----------|
-| Бургер-меню | Переключает `is-open` у навигации и кнопки. |
-| Активная ссылка | Подсвечивает пункт меню по текущему URL. |
-| Обработка ошибок картинок | Скрывает `<img>` при ошибке загрузки. |
-| Кнопка бронирования | Меняет текст, блокирует кнопку, выводит ID в консоль. |
-
----
-
-## 5. Поток данных (Data Flow)
-
-```
-Пользователь
-    │
-    ▼
-Браузер → GET /
-    │
-    ▼
-Express (server.js) → routes/index.js → GET / → render('index.ejs')
-    │                                      │
-    │                     ┌────────────────┘
-    │                     ▼
-    │              header.ejs + index.ejs + footer.ejs
-    │                     │
-    │                     ▼
-    │              Статика: /css/style.css, /js/main.js, /images/*
-    │                     │
-    ▼                     ▼
-    │         Пользователь нажимает «Смотреть туры»
-    │                     │
-    ▼                     ▼
-Express → routes/tours.js → GET /tours → render('tours.ejs')
-    │                          │
-    │                   data/tours.js (массив из 3 туров)
-    │                          │
-    │                          ▼
-    │                   tours.ejs: цикл по туров → карточки
-    │                          │
-    ▼                          ▼
-    │         Пользователь нажимает «Подробнее»
-    │                          │
-    ▼                          ▼
-Express → routes/tours.js → GET /tours/:id → findTourById(id)
-    │                          │
-    │                          ▼
-    │                   tour.ejs: отображение деталей тура
-    │                          │
-    ▼                          ▼
-    │         Пользователь нажимает «Забронировать»
-    │                          │
-    ▼                          ▼
-    │                  JS: меняет текст кнопки, console.log
-    │                  (серверный вызов отсутствует)
-```
-
----
-
-## 6. Зависимости между файлами
-
-```
-server.js
-├── routes/index.js
-│   ├── views/index.ejs
-│   │   ├── views/partials/header.ejs
-│   │   │   └── public/css/style.css
-│   │   └── views/partials/footer.ejs
-│   │       └── public/js/main.js
-│   ├── views/about.ejs
-│   │   ├── views/partials/header.ejs
-│   │   └── views/partials/footer.ejs
-│   └── (healthz → JSON, без шаблонов)
-│
-├── routes/tours.js
-│   ├── data/tours.js
-│   ├── views/tours.ejs
-│   │   ├── views/partials/header.ejs
-│   │   └── views/partials/footer.ejs
-│   └── views/tour.ejs
-│       ├── views/partials/header.ejs
-│       └── views/partials/footer.ejs
-│
-├── views/404.ejs (404-хендлер в server.js)
-│   ├── views/partials/header.ejs
-│   └── views/partials/footer.ejs
-│
-└── views/error.ejs (error-хендлер в server.js)
-    ├── views/partials/header.ejs
-    └── views/partials/footer.ejs
-
-Статика (express.static):
-├── public/css/style.css   ← header.ejs
-├── public/js/main.js      ← footer.ejs
-└── public/images/*        ← tours.ejs, tour.ejs (но пути не совпадают с data/tours.js)
-```
-
----
-
-## 7. Маршруты и их обработчики
-
-| URL | Метод | Файл маршрута | Функция | Шаблон | Переменные |
-|-----|-------|---------------|---------|--------|------------|
-| `/` | GET | `routes/index.js` | `GET /` | `index.ejs` | `title` |
-| `/healthz` | GET | `routes/index.js` | `GET /healthz` | — (JSON) | `status`, `uptime` |
-| `/about` | GET | `routes/index.js` | `GET /about` | `about.ejs` | `title` |
-| `/tours` | GET | `routes/tours.js` | `GET /` | `tours.ejs` | `title`, `tours` |
-| `/tours/:id` | GET | `routes/tours.js` | `GET /:id` | `tour.ejs` | `title`, `tour` |
-| любой другой | — | `server.js` | 404-хендлер | `404.ejs` | `title` |
-| при ошибке | — | `server.js` | error-хендлер | `error.ejs` | `title`, `message`, `status` |
-
----
-
-## 8. Переменные окружения
-
-| Переменная | По умолчанию | Где используется | Назначение |
-|------------|-------------|------------------|------------|
-| `PORT` | `3000` | `server.js`, `Dockerfile`, `docker-compose.yml` | Порт приложения внутри контейнера |
-| `HOST` | `0.0.0.0` | `server.js` | Адрес прослушивания (0.0.0.0 для Docker) |
-| `NODE_ENV` | `production` | `docker-compose.yml`, `docker-compose.dev.yml` | Режим Express |
-| `APP_PORT` | `3000` | `docker-compose.yml` | Порт на хост-машине (через шаблон `${APP_PORT:-3000}`) |
-
----
-
-## 9. Жизненный цикл запуска
-
-### Production (`docker compose up -d --build`)
-
-1. Docker читает `Dockerfile` → собирает образ `tur-project:latest`.
-2. Копирует `package.json` + `package-lock.json` → `npm ci --omit=dev`.
-3. Копирует код → меняет владельца на `node`.
-4. Запускает `node server.js` на порту 3000.
-5. Docker Compose маппит `${APP_PORT:-3000}:3000`.
-6. `HEALTHCHECK` каждые 30 секунд проверяет `GET /healthz`.
-7. Сайт доступен по `http://localhost:<APP_PORT>`.
-
-### Development (`docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`)
-
-1. Собирается тот же образ.
-2. Bind mount `./` → `/app` (исходники с хоста).
-3. Том `/app/node_modules` (сохраняет зависимости).
-4. Команда: `npm run dev` → `node --watch server.js`.
-5. Любое изменение `server.js` → автоперезапуск.
-6. EJS и CSS читаются с диска при каждом запросе.
-
----
-
-## 10. Замечания и потенциальные улучшения
-
-1. **Несовпадение путей изображений:** `data/tours.js` ссылается на `/images/tour-sochi.jpg`, `/images/tour-istanbul.jpg`, `/images/tour-prague.jpg`, но в `public/images/` лежат `1.webp`, `2.jpg`, `4.jpg` и т.д. Нужно либо обновить пути в данных, либо переименовать файлы.
-2. **Расхождение DATA_CONTRACT.md и `data/tours.js`:** В `DATA_CONTRACT.md` описана полная схема БД с раздельными ценами (`flight_price`, `hotel_price`, `transfer_price`, `total_price`), полями `hotel_name`, `hotel_stars`, `is_active`. Текущий `data/tours.js` использует упрощённую структуру (`flight`, `hotel`, `transfer` как текстовые строки, `price` как единая сумма). При переходе на БД потребуется маппинг.
-3. **Бронирование:** кнопка «Забронировать» — только фронтенд-заглушка. В `DATA_CONTRACT.md` описана таблица `bookings` и маршруты `/profile`, `/manager`, `/admin` — но ни один из них не реализован.
-4. **Хранение данных:** массив в памяти — при перезапуске контейнера данные теряются (хотя это учебный проект). Рекомендуется переход на SQLite/PostgreSQL.
-5. **Тесты:** в проекте отсутствуют тесты.
-6. **DevDependencies:** в `package.json` нет `devDependencies` (например, `nodemon` или `jest`).
-7. **Сжатие:** не подключены middleware для gzip/brotli сжатия.
-8. **CORS:** не настроен (не требуется для SSR, но может понадобиться при разделении фронтенда).
-
----
-
-## 11. Итоговая сводка
-
-| Параметр | Значение |
-|----------|----------|
-| Фреймворк | Express 4.22.3 (диапазон `^4.19.2` в package.json) |
-| Шаблонизатор | EJS 3.1.10 |
-| Node.js | 20 (Alpine) |
-| Страниц | 6 (index, tours, tour, about, 404, error) |
-| Маршрутов | 5 (/, /healthz, /about, /tours, /tours/:id) |
-| Туров в базе | 3 (Сочи, Стамбул, Прага) |
-| Зависимостей | 2 прямых (express, ejs), 74 транзитивных |
-| Файлов изображений | 10 (9 изображений + .gitkeep) |
-| Строк CSS | 521 |
-| Строк JS | 44 |
-| Docker-образ | node:20-alpine |
-| Healthcheck | GET /healthz каждые 30 сек |
-| Режимы запуска | production, development |
-| Порт | 3000 (внутренний), APP_PORT (внешний) |
-| Коммитов | 7 |
-| Репозиторий | Git |
-
----
-
-*Этот файл является внутренним отчётом и не предназначен для коммита в GitHub.*
-
----
-
-# Часть II. Обновлённый анализ — состояние после добавления БД и авторизации
-
-> Раздел ниже описывает текущее состояние репозитория (коммит `15f9c07`, 19 коммитов).
-> Всё, что описано в Части I выше, остаётся верным для базового каркаса (Express + EJS + Docker), но к нему добавлены: PostgreSQL, сессии, ролевая авторизация, панели администратора и менеджера.
-
----
-
-## 12. Обновлённая файловая структура (текущее состояние)
-
-```
-Tur-Project/
-├── .dockerignore              # Исключения из Docker-образа
-├── .gitignore                 # Исключения из Git
-├── DATA_CONTRACT.md           # Контракт данных (реализован в БД)
-├── docker-compose.yml         # Production: приложение + PostgreSQL
-├── docker-compose.dev.yml     # Оверрайд для разработки (bind mount + --watch)
-├── Dockerfile                 # Сборка образа (node:20-alpine)
-├── package.json               # 5 production-зависимостей
-├── package-lock.json          # Фиксация версий
-├── PROJECT_ANALYSIS.md        # Этот отчёт
-├── README.md                  # Описание для GitHub
-│
-├── server.js                  # Точка входа (обновлён: сессии, auth, /admin, /manager)
-│
-├── db/                        # ← НОВАЯ ПАПКА: работа с PostgreSQL
-│   ├── pool.js                # Пул соединений pg (DATABASE_URL)
-│   ├── init.js                # CREATE TABLE users/tours/bookings + индексы
-│   └── seed.js                # 3 тестовых пользователя + 5 туров
-│
-├── middlewares/               # ← НОВАЯ ПАПКА: middleware-функции
-│   └── auth.js                # attachCurrentUser, requireAuth, requireRole, dropSession
-│
-├── routes/
-│   ├── index.js               # /, /healthz, /about
-│   ├── tours.js               # /tours, /tours/:id (пока из data/tours.js)
-│   └── auth.js                # ← НОВЫЙ: /auth/login, /auth/register, /auth/logout, /auth/me
-│
-├── data/
-│   └── tours.js               # Массив в памяти (используется routes/tours.js)
-│
-├── views/
-│   ├── index.ejs              # Главная
-│   ├── tours.ejs              # Список туров (из data/)
-│   ├── tour.ejs               # Страница одного тура
-│   ├── about.ejs              # О нас
-│   ├── login.ejs              # ← НОВЫЙ: форма входа
-│   ├── register.ejs           # ← НОВЫЙ: форма регистрации
-│   ├── admin.ejs              # ← НОВЫЙ: панель админа (туры, заявки, пользователи)
-│   ├── manager.ejs            # ← НОВЫЙ: панель менеджера (туры, свои заявки)
-│   ├── 404.ejs                # Не найдено
-│   ├── error.ejs              # Ошибка сервера
-│   └── partials/
-│       ├── header.ejs         # Шапка + навигация
-│       └── footer.ejs         # Подвал + подключение JS
-│
-├── public/
-│   ├── css/
-│   │   └── style.css          # 521 строка (без изменений)
-│   ├── js/
-│   │   └── main.js            # 44 строки (без изменений)
-│   └── images/                # Пустая папка (изображения не закоммичены)
-│
-└── node_modules/              # 76+ пакетов (не в git)
-```
-
-**Итого новых файлов:** 9 (`db/pool.js`, `db/init.js`, `db/seed.js`, `middlewares/auth.js`, `routes/auth.js`, `views/login.ejs`, `views/register.ejs`, `views/admin.ejs`, `views/manager.ejs`).
-
----
-
-## 13. Обновлённые зависимости (`package.json`)
-
-| Пакет | Версия | Назначение |
-|-------|--------|------------|
-| `express` | `^4.19.2` | Веб-фреймворк (был) |
-| `ejs` | `^3.1.10` | Шаблонизатор (был) |
-| `bcryptjs` | `^2.4.3` | Хэширование и проверка паролей |
-| `express-session` | `^1.18.1` | Управление сессиями (cookie `connect.sid`) |
-| `pg` | `^8.13.0` | Драйвер PostgreSQL (пул соединений, запросы) |
-
-Новые npm-скрипты:
-| Скрипт | Команда | Назначение |
-|--------|---------|------------|
-| `db:init` | `node db/init.js` | Создание таблиц |
-| `db:seed` | `node db/seed.js` | Заполнение тестовыми данными |
-
----
-
-## 14. `server.js` — что изменилось
-
-Теперь сервер подключает:
-
-```javascript
-const session = require('express-session');
-const authRouter = require('./routes/auth');
-const { attachCurrentUser, requireAuth, requireRole } = require('./middlewares/auth');
-const pool = require('./db/pool');
-```
-
-**Новые middleware-слои (в порядке выполнения):**
-1. `express-session` — сессии на cookie `connect.sid`, secret из `SESSION_SECRET`, maxAge 24ч.
-2. `attachCurrentUser` — при каждом запросе читает пользователя из БД по `req.session.userId`, кладёт в `res.locals.currentUser` (для шаблонов) и `req.user` (для middleware). Если пользователь заблокирован (`is_blocked = true`) — принудительный разлогин.
-
-**Новые маршруты:**
-| URL | Метод | Защита | Действие |
-|-----|-------|--------|----------|
-| `/auth/*` | GET/POST | — | Роутер `routes/auth.js` |
-| `/login`, `/register`, `/logout` | GET/POST | — | Алиасы (для `requireAuth`-редиректов) |
-| `/admin` | GET | `requireAuth` + `requireRole('admin')` | Панель: все туры, все заявки, все пользователи |
-| `/manager` | GET | `requireAuth` + `requireRole('admin','manager')` | Панель: активные туры + последние 20 заявок менеджера |
-
-**Trust proxy:** `app.set('trust proxy', 1)` — для корректной работы `cookie.secure` за nginx.
-
----
-
-## 15. `db/` — работа с PostgreSQL
-
-### 15.1 `db/pool.js` (16 строк)
-
-Создаёт единый `Pool` из `pg` на основе `process.env.DATABASE_URL`. Экспортируется во все модули. Содержит обработчик `pool.on('error', ...)` для логов обрыва простаивающих соединений.
-
-### 15.2 `db/init.js` (81 строка)
-
-Идемпотентный скрипт (`CREATE TABLE IF NOT EXISTS`). Создаёт таблицы строго по `DATA_CONTRACT.md`:
-
-- **`users`** — `id`, `email` (UNIQUE), `password_hash`, `full_name`, `phone`, `role` (CHECK: user/manager/admin), `is_blocked`, `created_at`.
-- **`tours`** — `id`, `title`, `country`, `city`, `nights`, `rating` (CHECK 1.0–5.0), `image`, `description`, `flight_info`, `flight_price`, `hotel_name`, `hotel_stars` (CHECK 3/4/5), `hotel_info`, `hotel_price`, `transfer_info`, `transfer_price`, `total_price`, `is_active`.
-- **`bookings`** — `id`, `tour_id` (FK→tours), `user_id` (FK→users, nullable), `manager_id` (FK→users, nullable), `client_name`, `client_phone`, `comment`, `status` (CHECK: new/confirmed/cancelled), `created_at`.
-
-Индексы: `idx_tours_country`, `idx_tours_city`, `idx_tours_total`, `idx_bookings_user`, `idx_bookings_manager`.
-
-### 15.3 `db/seed.js` (179 строк)
-
-Идемпотентный seed (проверяет `count(*) FROM tours > 0`). Создаёт:
-
-**3 пользователя** (пароль `TestPass123!`, хэш bcrypt):
-| email | роль |
-|-------|------|
-| `admin@turist.ru` | admin |
-| `manager@turist.ru` | manager |
-| `user@turist.ru` | user |
-
-**5 туров** (Сочи, Стамбул, Прага, Анталья, Санкт-Петербург) с полными деталями по схеме `tours` из контракта.
-
----
-
-## 16. `middlewares/auth.js` (112 строк) — ролевая защита
-
-Экспортирует 4 функции:
-
-| Функция | Назначение |
-|---------|------------|
-| `attachCurrentUser` | Глобальный middleware: читает пользователя из БД при каждом запросе. Кладёт в `res.locals.currentUser` (без `password_hash`). При `is_blocked = true` или удалённом пользователе — уничтожает сессию. |
-| `requireAuth` | Защита маршрутов: если `req.user` отсутствует — редирект на `/login?next=<current_url>`. |
-| `requireRole(...roles)` | Проверка роли: если роль не входит в список — редирект на `/tours?error=access_denied`. |
-| `dropSession` | Уничтожает сессию, чистит cookie `connect.sid`, редиректит на указанный путь. |
-
-**Ключевой принцип:** в сессии хранится только `userId`. Данные и статус блокировки всегда актуальны из БД — изменения применяются мгновенно, без перезахода.
-
----
-
-## 17. `routes/auth.js` (174 строки) — авторизация
-
-| Метод | Путь | Описание |
-|-------|------|----------|
-| GET | `/auth/register` | Форма регистрации (если уже залогинен — редирект по роли) |
-| POST | `/auth/register` | Валидация полей, проверка пароля ≥ 8 симв., bcrypt.hash, INSERT INTO users (role='user'), установка сессии |
-| GET | `/auth/login` | Форма входа |
-| POST | `/auth/login` | SELECT по email, проверка is_blocked, bcrypt.compare, req.session.userId, редирект по роли или на `next` |
-| POST | `/auth/logout` | Уничтожение сессии |
-| GET | `/auth/logout` | Выход по ссылке (для шапки) |
-| GET | `/auth/me` | JSON `{ user: currentUser }` для отладки (без password_hash) |
-
-Функция `homeFor(role)`: admin → `/admin`, manager → `/manager`, user → `/tours`.
-
----
-
-## 18. Новые шаблоны (views)
-
-### 18.1 `views/login.ejs` (46 строк)
-Форма: email + пароль. Выводит `error` при неудаче. Кнопка «Войти» + ссылка «Нет аккаунта?».
-
-### 18.2 `views/register.ejs` (70 строк)
-Форма: email, пароль, ФИО, телефон. Валидация на сервере. Кнопка «Зарегистрироваться» + ссылка «Уже есть аккаунт?».
-
-### 18.3 `views/admin.ejs` (79 строк)
-Три таблицы: туры (ID, название, страна, город, цена, активен), заявки (ID, тур, клиент, телефон, статус, дата), пользователи (ID, email, ФИО, роль, заблокирован).
-
-### 18.4 `views/manager.ejs` (58 строк)
-Приветствие по имени. Две таблицы: активные туры (ID, название, страна, город, ночи, цена) и последние заявки этого менеджера.
-
----
-
-## 19. Docker — обновлённый `docker-compose.yml`
-
-Добавлен сервис базы данных:
-
-```yaml
-services:
-  app:
+    build: .
+    ports: ${APP_PORT:-3000}:3000
     environment:
       - DATABASE_URL=postgres://tur:${POSTGRES_PASSWORD:-tur_pass}@db:5432/tur_project
       - SESSION_SECRET=${SESSION_SECRET:-tur-project-secret-change-in-production}
     depends_on:
       db:
-        condition: service_healthy   # ждёт, пока Postgres будет готов
+        condition: service_healthy
 
   db:
     image: postgres:16-alpine
-    container_name: tur-project-db
     environment:
       POSTGRES_USER: tur
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tur_pass}
       POSTGRES_DB: tur_project
     volumes:
-      - pgdata:/var/lib/postgresql/data   # данные переживают docker compose down
-    ports:
-      - "${DB_PORT:-5432}:5432"
-    healthcheck:
-      test: pg_isready -U tur -d tur_project
+      - pgdata:/var/lib/postgresql/data
+    ports: ${DB_PORT:-5432}:5432
+    healthcheck: pg_isready -U tur -d tur_project
 
 volumes:
   pgdata:
 ```
 
-Новые переменные окружения:
-| Переменная | По умолчанию | Назначение |
-|------------|-------------|------------|
-| `DATABASE_URL` | (в compose) | Строка подключения к PostgreSQL |
-| `SESSION_SECRET` | `tur-project-secret-...` | Подпись cookie сессии |
-| `POSTGRES_PASSWORD` | `tur_pass` | Пароль БД (для compose) |
-| `DB_PORT` | `5432` | Порт Postgres на хосте |
+### 3.3 `docker-compose.dev.yml`
 
-Порядок инициализации при первом запуске:
+Bind mount `./` → `/app`, `NODE_ENV=development`, `npm run dev` (`node --watch`).
+
+### 3.4 Порядок инициализации
+
 ```powershell
 docker compose up -d --build
 docker compose exec app node db/init.js
@@ -1038,75 +340,145 @@ docker compose exec app node db/seed.js
 
 ---
 
-## 20. Обновлённый поток данных
+## 4. Маршруты и их обработчики
+
+| URL | Метод | Файл | Защита | Шаблон | Переменные |
+|-----|-------|------|--------|--------|------------|
+| `/` | GET | `routes/index.js` | — | `index.ejs` | `title` |
+| `/healthz` | GET | `routes/index.js` | — | — (JSON) | `status`, `uptime` |
+| `/about` | GET | `routes/index.js` | — | `about.ejs` | `title` |
+| `/tours` | GET | `routes/tours.js` | — | `tours.ejs` | `tours`, `countries`, `filters` |
+| `/tours/:id` | GET | `routes/tours.js` | — | `tour.ejs` | `tour`, `flightClassLabel`, `mealLabel`, `transferLabel` |
+| `/login` | GET/POST | `routes/auth.js` | — | `login.ejs` | `error`, `nextUrl` |
+| `/register` | GET/POST | `routes/auth.js` | — | `register.ejs` | `error` |
+| `/logout` | GET/POST | `routes/auth.js` | — | (редирект) | — |
+| `/me` | GET | `routes/auth.js` | — | (JSON) | `{ user: currentUser }` |
+| `/admin` | GET | `server.js` | `requireAuth` + `requireRole('admin')` | `admin.ejs` | `tours`, `bookings`, `users` |
+| `/manager` | GET | `server.js` | `requireAuth` + `requireRole('admin','manager')` | `manager.ejs` | `tours`, `recentBookings` |
+| любой другой | — | `server.js` | — | `404.ejs` | `title` |
+| при ошибке | — | `server.js` | — | `error.ejs` | `title`, `message`, `status` |
+
+---
+
+## 5. Зависимости между файлами
+
+```
+server.js
+├── routes/index.js → views/index.ejs, views/about.ejs
+│   └── partials/header.ejs → partials/footer.ejs → public/css/style.css, public/js/main.js
+├── routes/tours.js → views/tours.ejs, views/tour.ejs
+│   └── partials/header.ejs → partials/footer.ejs
+├── routes/auth.js → views/login.ejs, views/register.ejs
+├── middlewares/auth.js → db/pool.js
+├── /admin → views/admin.ejs
+├── /manager → views/manager.ejs
+└── public/css/style.css, public/js/main.js, public/images/*
+
+db/
+├── init.js → pool.js
+├── seed.js → pool.js, bcrypt
+└── pool.js → pg
+```
+
+---
+
+## 6. Поток данных
 
 ```
 Гость → GET /tours
-    → routes/tours.js → data/tours.js (массив в памяти) → tours.ejs
+    → routes/tours.js: parseFilters(req.query)
+    → pool.query: SELECT * FROM tours WHERE is_active = TRUE AND filters... ORDER BY total_price ASC
+    → pool.query: SELECT DISTINCT destination_country FROM tours WHERE is_active
+    → tours.ejs: форма фильтров + карточки (destination_country, destination_city, total_price...)
 
-Зарегистрированный user → GET /admin
-    → requireAuth (attachCurrentUser уже выполнил req.user)
-    → requireRole('admin') → 403-редирект (не админ)
-
-Админ → GET /admin
+Авторизованный user → GET /admin
     → attachCurrentUser: SELECT users WHERE id = session.userId
-    → requireAuth: req.user есть ✓
+    → requireAuth: req.user ✓
     → requireRole('admin'): role === 'admin' ✓
-    → pool.query: SELECT * FROM tours / bookings / users
-    → admin.ejs (таблицы)
+    → pool.query: SELECT * FROM tours/bookings/users
+    → admin.ejs
 
 POST /auth/login
     → pool.query: SELECT * FROM users WHERE email = $1
+    → is_blocked? → 403
     → bcrypt.compare(password, password_hash)
     → req.session.userId = user.id
-    → 302 → /admin | /manager | /tours
+    → next (req.body.next || req.query.next) → туда
+    → homeFor(role) → /admin | /manager | /tours
 ```
 
 ---
 
-## 21. Расхождения и замечания по текущему состоянию
+## 7. Переменные окружения
 
-1. **`routes/tours.js` пока читает из `data/tours.js`**, а не из PostgreSQL. Данные в БД (seed) и в массиве не синхронизированы. Для каталога `/tours` нужно перевести роутер на `pool.query`.
-
-2. **Маршрут `/profile`** описан в `DATA_CONTRACT.md` (п. 3), но не реализован в коде. Личный кабинет клиента с его бронями отсутствует.
-
-3. **Кнопка «Забронировать»** (`tour.ejs` + `main.js`) — по-прежнему фронтенд-заглушка. POST `/bookings` не реализован.
-
-4. **`public/images/` пуста** (в текущем дереве файлов не обнаружено ни одного изображения). Пути `/images/tour-sochi.jpg` и т.д. из `data/tours.js` и seed не имеют реальных файлов.
-
-5. **`views/partials/header.ejs` не показывает ссылки на вход/выход и панели** — навигация содержит только «Главная», «Туры», «О нас». Для авторизованных пользователей UI-связь с `/admin`, `/manager`, `/auth/logout` отсутствует в шаблоне.
-
-6. **Сессии в памяти** (`express-session` default MemoryStore) — при рестарте контейнера все пользователи разлогинены. Для продакшена нужен `connect-pg-simple`.
+| Переменная | По умолчанию | Где используется | Назначение |
+|------------|-------------|------------------|------------|
+| `PORT` | `3000` | `server.js`, `Dockerfile` | Порт приложения внутри контейнера |
+| `HOST` | `0.0.0.0` | `server.js` | Адрес прослушивания |
+| `NODE_ENV` | `production` | `docker-compose.yml`, `docker-compose.dev.yml` | Режим |
+| `APP_PORT` | `3000` | `docker-compose.yml` | Порт на хосте |
+| `DATABASE_URL` | (compose) | `db/pool.js` | Строка подключения к PostgreSQL |
+| `SESSION_SECRET` | `tur-project-secret-...` | `server.js` | Подпись cookie сессии |
+| `POSTGRES_PASSWORD` | `tur_pass` | `docker-compose.yml` | Пароль БД |
+| `DB_PORT` | `5432` | `docker-compose.yml` | Порт Postgres на хосте |
 
 ---
 
-## 22. Итоговая сводка (обновлённая)
+## 8. Жизненный цикл запуска
+
+### Production (`docker compose up -d --build`)
+
+1. Сборка образа `tur-project:latest` из `Dockerfile` (Alpine, `npm ci --omit=dev`).
+2. `docker-compose.yml` создаёт контейнеры: `app` + `db` (ждёт `service_healthy`).
+3. Инициализация БД: `docker compose exec app node db/init.js`.
+4. Seed: `docker compose exec app node db/seed.js`.
+5. `HEALTHCHECK` каждые 30 сек проверяет `/healthz`.
+6. Сайт: `http://localhost:<APP_PORT>`.
+
+### Development (`docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`)
+
+1. Bind mount `./` → `/app`, `NODE_ENV=development`.
+2. `npm run dev` → `node --watch server.js`.
+3. EJS и CSS читаются с диска при каждом запросе.
+
+---
+
+## 9. Замечания и потенциальные улучшения
+
+1. **`data/tours.js`** — устаревший файл, больше не импортируется никем. Можно удалить.
+2. **Изображения:** пути в seed (`/images/tour-sochi.jpg` и т.д.) не совпадают с реальными файлами в `public/images/` (`1.webp`, `2.jpg` и т.д.). JS скрывает битые `<img>`, остаётся CSS-градиент.
+3. **Кнопка «Забронировать»** — заглушка в `main.js`. Нет POST-маршрута для создания записи в `bookings`.
+4. **Маршрут `/profile`** — описан в `DATA_CONTRACT.md`, но не реализован.
+5. **Сессии в памяти** — при рестарте контейнера все пользователи разлогинены. Для продакшена нужен `connect-pg-simple`.
+6. **Сжатие** — не подключены middleware для gzip/brotli.
+7. **Тесты** — отсутствуют.
+8. **DevDependencies** — отсутствуют (можно добавить `nodemon`, `jest`).
+
+---
+
+## 10. Итоговая сводка
 
 | Параметр | Значение |
 |----------|----------|
 | Фреймворк | Express 4 |
 | Шаблонизатор | EJS 3.1.10 |
-| Шаблонизатор | EJS 3.1.10 |
 | Node.js | 20 (Alpine) |
 | База данных | PostgreSQL 16 (pg 8.13) |
-| Таблицы | users, tours, bookings |
+| Таблицы | `users`, `tours`, `bookings` |
 | Авторизация | Сессии + bcrypt + роли (user/manager/admin) |
-| Middleware | attachCurrentUser, requireAuth, requireRole |
-| Страниц (шаблонов) | 10 (было 6 + login, register, admin, manager) |
-| Маршрутов | 14+ (было 5) |
+| Middleware | `attachCurrentUser`, `requireAuth`, `requireRole` |
+| Фильтры каталога | Страна, город, цена, ночи, звёзды (ILIKE, <=, >=) |
+| Страниц (шаблонов) | 10 (index, tours, tour, about, login, register, admin, manager, 404, error) |
+| Маршрутов | 12+ |
 | Production-зависимостей | 5 (express, ejs, bcryptjs, express-session, pg) |
 | Docker-сервисы | app + db (postgres:16-alpine) |
 | Seed-пользователей | 3 (admin, manager, user) |
 | Seed-туров | 5 |
-| Коммитов | 19 |
-| Ветка | main (GitHub: ZordTop/Tur-Project) |
+| CSS | ~800 строк |
+| Порт | 3000 (внутренний), APP_PORT (внешний) |
+| Healthcheck | GET /healthz каждые 30 сек |
+| Режимы запуска | production, development |
 
 ---
 
-## 23. Ссылки на GitHub
-
-- Репозиторий: `https://github.com/ZordTop/Tur-Project`
-- PR #13 (bd) — добавление PostgreSQL, авторизации, панелей
-- PR #12 (feat/frontend-ui) — вёрстка шаблонов
-- PR #11 (feat/backend-logic) — серверная логика маршрутов
-- PR #8 (feat/db-and-auth) — первая итерация БД и auth
+*Этот файл является внутренним отчётом и не предназначен для коммита в GitHub.*
