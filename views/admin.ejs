@@ -1,78 +1,156 @@
 <%- include('partials/header') %>
 
-<section class="section">
+<%
+  /* Вспомогательные функции (безопасны при undefined) */
+  var user = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : {};
+  var _tours = (typeof tours !== 'undefined' && tours) ? tours : [];
+  var _bookings = (typeof bookings !== 'undefined' && bookings) ? bookings : [];
+  var _users = (typeof users !== 'undefined' && users) ? users : [];
+
+  function price(v) { var n = Number(v); return isNaN(n) ? '—' : n.toLocaleString('ru-RU'); }
+  function fmt(d) { if (!d) return '—'; try { return new Date(d).toLocaleDateString('ru-RU'); } catch(_) { return String(d); } }
+
+  var statusMap = {
+    new: { label: 'Новая', cls: 'badge badge--status-new' },
+    confirmed: { label: 'Подтверждена', cls: 'badge badge--status-confirmed' },
+    cancelled: { label: 'Отменена', cls: 'badge badge--status-cancelled' }
+  };
+  var roleMap = { user: 'Клиент', manager: 'Менеджер', admin: 'Админ' };
+  var roleBadge = function (r) {
+    return 'badge badge--role-' + (r || 'user');
+  };
+%>
+
+<section class="section admin">
   <div class="container">
-    <h1 class="page-title">Панель админа</h1>
+    <div class="admin-head">
+      <div>
+        <h1 class="admin-head__title">Админ-панель</h1>
+        <p class="admin-head__sub">управление турами, заявками и пользователями</p>
+      </div>
+    </div>
 
-    <% if (tours) { %>
-      <h2>Туры (всего: <%= tours.length %>)</h2>
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>ID</th><th>Название</th><th>Страна</th><th>Город</th>
-            <th>Цена</th><th>Активен</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% tours.forEach(t => { %>
-          <tr>
-            <td><%= t.id %></td>
-            <td><%= t.title %></td>
-            <td><%= t.destination_country %></td>
-            <td><%= t.destination_city %></td>
-            <td><%= t.total_price.toLocaleString('ru-RU') %> ₽</td>
-            <td><%= t.is_active ? 'да' : 'нет' %></td>
-          </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    <% } %>
+    <!-- ═══ 1. Туры ═══ -->
+    <div class="admin-section">
+      <h2 class="admin-section__title">
+        Туры
+        <span class="admin-section__count"><%= _tours.length %></span>
+      </h2>
+      <div class="table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Название</th>
+              <th>Маршрут</th>
+              <th>Отель</th>
+              <th>Активен</th>
+              <th style="text-align:right;">Цена</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% _tours.forEach(function (t) { %>
+            <tr>
+              <td><%= t.id %></td>
+              <td><strong><%= t.title || '—' %></strong></td>
+              <td>
+                <span><%= t.destination_city || t.city || '—' %></span>
+                <% if (t.destination_country || t.country) { %>
+                  <br><small style="color:var(--clr-muted)"><%= t.destination_country || t.country %></small>
+                <% } %>
+              </td>
+              <td>
+                <%= t.hotel_name || '—' %>
+                <% if (t.hotel_stars) { %><br><span class="badge badge--stars"><%= '★'.repeat(Number(t.hotel_stars)) %></span><% } %>
+              </td>
+              <td>
+                <% if (t.is_active != null) { %>
+                  <span class="badge <%= t.is_active ? 'badge--status-confirmed' : 'badge--status-cancelled' %>">
+                    <%= t.is_active ? 'Да' : 'Нет' %>
+                  </span>
+                <% } %>
+              </td>
+              <td class="num"><%= price(t.total_price) %> ₽</td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
 
-    <% if (bookings) { %>
-      <h2>Заявки (всего: <%= bookings.length %>)</h2>
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>ID</th><th>Тур</th><th>Клиент</th><th>Телефон</th>
-            <th>Статус</th><th>Дата</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% bookings.forEach(b => { %>
-          <tr>
-            <td><%= b.id %></td>
-            <td><%= b.tour_title || '—' %></td>
-            <td><%= b.client_name %></td>
-            <td><%= b.client_phone %></td>
-            <td><%= b.status %></td>
-            <td><%= b.created_at.toLocaleString('ru-RU') %></td>
-          </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    <% } %>
+    <!-- ═══ 2. Заявки ═══ -->
+    <div class="admin-section">
+      <h2 class="admin-section__title">
+        Заявки на бронирование
+        <span class="admin-section__count"><%= _bookings.length %></span>
+      </h2>
+      <div class="table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Тур</th>
+              <th>Клиент</th>
+              <th>Телефон</th>
+              <th>Статус</th>
+              <th>Дата</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% _bookings.forEach(function (b) { %>
+            <% var st = statusMap[b.status] || { label: String(b.status || '—'), cls: 'badge badge--muted' }; %>
+            <tr>
+              <td><%= b.id %></td>
+              <td><%= b.tour_title || '—' %></td>
+              <td><strong><%= b.client_name || '—' %></strong></td>
+              <td class="num"><%= b.client_phone || '—' %></td>
+              <td><span class="<%= st.cls %>"><%= st.label %></span></td>
+              <td><%= fmt(b.created_at) %></td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
 
-    <% if (users) { %>
-      <h2>Пользователи (всего: <%= users.length %>)</h2>
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>ID</th><th>Email</th><th>ФИО</th><th>Роль</th><th>Заблокирован</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% users.forEach(u => { %>
-          <tr>
-            <td><%= u.id %></td>
-            <td><%= u.email %></td>
-            <td><%= u.full_name %></td>
-            <td><%= u.role %></td>
-            <td><%= u.is_blocked ? 'да' : 'нет' %></td>
-          </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    <% } %>
+    <!-- ═══ 3. Пользователи ═══ -->
+    <div class="admin-section">
+      <h2 class="admin-section__title">
+        Пользователи
+        <span class="admin-section__count"><%= _users.length %></span>
+      </h2>
+      <div class="table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Email</th>
+              <th>ФИО</th>
+              <th>Роль</th>
+              <th>Заблокирован</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% _users.forEach(function (u) { %>
+            <tr>
+              <td><%= u.id %></td>
+              <td><%= u.email || '—' %></td>
+              <td><%= u.full_name || '—' %></td>
+              <td><span class="<%= roleBadge(u.role) %>"><%= roleMap[u.role] || u.role %></span></td>
+              <td>
+                <% if (u.is_blocked != null) { %>
+                  <span class="badge <%= u.is_blocked ? 'badge--status-cancelled' : 'badge--status-confirmed' %>">
+                    <%= u.is_blocked ? 'Да' : 'Нет' %>
+                  </span>
+                <% } %>
+              </td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 </section>
 

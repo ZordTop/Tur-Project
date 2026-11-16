@@ -1,85 +1,119 @@
 <%- include('partials/header') %>
 
+<%
+  /* ── Вспомогательные функции ── */
+  var _bookings = (typeof bookings !== 'undefined' && bookings) ? bookings : [];
+  var user = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
+
+  // Маппинг статусов бронирования
+  var statusMap = {
+    new:       { label: 'Новая',        cls: 'badge--status-new' },
+    confirmed: { label: 'Подтверждена', cls: 'badge--status-confirmed' },
+    cancelled: { label: 'Отменена',     cls: 'badge--status-cancelled' }
+  };
+
+  // Маппинг ролей
+  var roleMap = { user: 'Клиент', manager: 'Менеджер', admin: 'Администратор' };
+
+  function fmt(d) { if (!d) return '—'; try { return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }); } catch(_) { return String(d); } }
+  function price(v) { var n = Number(v); return isNaN(n) ? String(v) : n.toLocaleString('ru-RU'); }
+  function initials(name) { if (!name) return '?'; var p = name.trim().split(/\s+/); return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : p[0][0].toUpperCase(); }
+%>
+
 <section class="section">
   <div class="container">
     <h1 class="page-title">Личный кабинет</h1>
-    <p class="page-subtitle">
-      Здравствуйте, <%= currentUser.full_name %>! Здесь собраны все ваши заявки на туры.
-    </p>
+    <p class="page-subtitle">Ваши данные и история бронирований.</p>
 
-    <% if (justBooked) { %>
-      <p class="empty">
-        Заявка создана! Менеджер свяжется с вами для подтверждения.
-        <a href="/tours">Вернуться в каталог</a>
-      </p>
-    <% } %>
+    <div class="profile-grid">
 
-    <% if (bookings.length === 0) { %>
-      <p class="empty">
-        У вас пока нет заявок.
-        <a href="/tours">Выберите тур</a> и нажмите «Забронировать».
-      </p>
-    <% } else { %>
-      <p class="results-count">Ваших заявок: <%= bookings.length %></p>
+      <!-- ─── Левая колонка: карточка пользователя ─── -->
+      <aside class="profile-card">
+        <div class="profile-card__top">
+          <div class="profile-card__avatar"><%= user ? initials(user.full_name) : '?' %></div>
+          <div>
+            <h2 class="profile-card__name"><%= user ? user.full_name : '—' %></h2>
+            <% if (user) { %>
+              <span class="badge badge--role-<%= user.role %>"><%= roleMap[user.role] || user.role %></span>
+            <% } %>
+          </div>
+        </div>
 
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>№</th>
-            <th>Тур</th>
-            <th>Направление</th>
-            <th>Вылет</th>
-            <th>Цена</th>
-            <th>Статус</th>
-            <th>Комментарий</th>
-            <th>Создана</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% bookings.forEach(function (b) { %>
-          <tr>
-            <td><%= b.id %></td>
-            <td>
-              <% if (b.tour_title && b.tour_is_active) { %>
-                <a href="/tours/<%= b.tour_id %>"><%= b.tour_title %></a>
-              <% } else if (b.tour_title) { %>
-                <%= b.tour_title %> <span class="card__rating">(снят с продажи)</span>
-              <% } else { %>
-                Тур снят с продажи
-              <% } %>
-            </td>
-            <td>
-              <% if (b.destination_country) { %>
-                <%= b.destination_country %> · <%= b.destination_city %>
-              <% } else { %>
-                —
-              <% } %>
-            </td>
-            <td>
-              <% if (b.departure_at) { %>
-                <%= b.departure_at.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) %>
-              <% } else { %>
-                —
-              <% } %>
-            </td>
-            <td>
-              <% if (b.total_price) { %>
-                <%= b.total_price.toLocaleString('ru-RU') %> ₽
-              <% } else { %>
-                —
-              <% } %>
-            </td>
-            <td><%= statusLabels[b.status] || b.status %></td>
-            <td><%= b.comment || '—' %></td>
-            <td><%= b.created_at.toLocaleString('ru-RU') %></td>
-          </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    <% } %>
+        <dl class="profile-card__list">
+          <div class="profile-card__row">
+            <dt>Email</dt>
+            <dd><%= user ? user.email : '—' %></dd>
+          </div>
+          <div class="profile-card__row">
+            <dt>Телефон</dt>
+            <dd><%= user && user.phone ? user.phone : '—' %></dd>
+          </div>
+          <% if (user && user.created_at) { %>
+            <div class="profile-card__row">
+              <dt>Дата регистрации</dt>
+              <dd><%= fmt(user.created_at) %></dd>
+            </div>
+          <% } %>
+        </dl>
+      </aside>
 
-    <div class="form__actions">
-      <a class="btn btn--primary" href="/tours">Смотреть туры</a>
+      <!-- ─── Правая колонка: брони ─── -->
+      <div>
+        <h2 style="margin:0 0 18px; font-size:1.25rem; font-weight:700;">
+          Мои брони
+          <span class="badge badge--muted" style="margin-left:8px;"><%= _bookings.length %></span>
+        </h2>
+
+        <% if (_bookings.length === 0) { %>
+          <div class="empty-state">
+            <div class="empty-state__icon">🧳</div>
+            <h3 class="empty-state__title">Броней пока нет</h3>
+            <p class="empty-state__text">Выберите тур и оформите заявку — она появится здесь.</p>
+            <a class="btn btn--primary" href="/tours">Смотреть туры</a>
+          </div>
+        <% } else { %>
+          <div class="bookings">
+            <% _bookings.forEach(function(b) { %>
+              <%
+                var st = statusMap[b.status] || { label: b.status || '—', cls: 'badge--muted' };
+              %>
+              <article class="booking-card">
+                <div class="booking-card__main">
+                  <h3 class="booking-card__title">
+                    <% if (b.tour_id) { %>
+                      <a href="/tours/<%= b.tour_id %>"><%= b.tour_title || 'Тур #' + b.tour_id %></a>
+                    <% } else { %>
+                      <%= b.tour_title || '—' %>
+                    <% } %>
+                  </h3>
+                  <div class="booking-card__meta">
+                    <% if (b.departure_at) { %>
+                      <span>📅 Вылет: <strong><%= fmt(b.departure_at) %></strong></span>
+                    <% } %>
+                    <% if (b.created_at) { %>
+                      <span>Заявка от: <%= fmt(b.created_at) %></span>
+                    <% } %>
+                    <% if (b.client_name) { %>
+                      <span>👤 <%= b.client_name %></span>
+                    <% } %>
+                  </div>
+                </div>
+
+                <div class="booking-card__aside">
+                  <span class="badge <%= st.cls %>"><%= st.label %></span>
+                  <% if (b.total_price != null) { %>
+                    <span class="booking-card__price">
+                      <%= price(b.total_price) %> ₽
+                      <small>за человека</small>
+                    </span>
+                  <% } %>
+                </div>
+              </article>
+            <% }); %>
+          </div>
+        <% } %>
+      </div>
+
     </div>
   </div>
 </section>

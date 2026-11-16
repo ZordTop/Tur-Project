@@ -1,58 +1,346 @@
 <%- include('partials/header') %>
 
-<section class="section">
+<%
+  /* ── Данные и помощники ── */
+  var user = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : {};
+  var _tours = (typeof tours !== 'undefined' && tours) ? tours : [];
+  var _recent = (typeof recentBookings !== 'undefined' && recentBookings) ? recentBookings : [];
+  var f = (typeof filters !== 'undefined' && filters) ? filters : {};
+
+  // Чтение значения фильтра из нескольких возможных имён ключей
+  var val = function () {
+    for (var i = 0; i < arguments.length; i++) {
+      var v = f[arguments[i]];
+      if (v !== undefined && v !== null && String(v) !== '') return String(v);
+    }
+    return '';
+  };
+
+  // Маппинг ENUM-значений БД → русский (DATA_CONTRACT.md, п. 2)
+  var flightClassMap = { economy: 'Эконом', comfort: 'Комфорт', business: 'Бизнес' };
+  var mealMap = { RO: 'Без питания', BB: 'Только завтраки', HB: 'Полупансион', AI: 'Всё включено' };
+  var transferMap = { bus: 'Общий автобус', private: 'Личный автомобиль' };
+
+  // Статусы заявки (DATA_CONTRACT.md, п. 3)
+  var statusMap = {
+    new: { label: 'НОВАЯ', cls: 'term-badge--st-new' },
+    confirmed: { label: 'ПОДТВЕРЖДЕНА', cls: 'term-badge--st-confirmed' },
+    cancelled: { label: 'ОТМЕНЕНА', cls: 'term-badge--st-cancelled' }
+  };
+
+  function plural(n, forms) {
+    var abs = Math.abs(n) % 100, last = abs % 10;
+    if (abs > 10 && abs < 20) return forms[2];
+    if (last > 1 && last < 5) return forms[1];
+    if (last === 1) return forms[0];
+    return forms[2];
+  }
+
+  function fmt(d) {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
+    catch (_) { return String(d); }
+  }
+
+  function fmtDateTime(d) {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+    catch (_) { return String(d); }
+  }
+
+  function price(v) { var n = Number(v); return isNaN(n) ? '—' : n.toLocaleString('ru-RU'); }
+  function stars(n) { var k = Number(n) || 0; return k > 0 ? '★'.repeat(k) : '—'; }
+
+  // Карта «id тура → цена» для подстановки цены в историю оформлений,
+  // если бэкенд не отдаёт total_price вместе с заявкой
+  var priceById = {};
+  _tours.forEach(function (t) { if (t && t.id != null) priceById[String(t.id)] = t.total_price; });
+
+  // Сводка для боковой панели
+  function routeOf(t) { return (t.departure_city || '—') + ' → ' + (t.destination_city || '—'); }
+  function hotelOf(t) { return (t.hotel_name || 'Отель не указан') + ' ' + stars(t.hotel_stars); }
+%>
+
+<section class="ws">
   <div class="container">
-    <h1 class="page-title">Панель менеджера</h1>
-    <p>Здравствуйте, <%= currentUser.full_name %>!</p>
 
-    <% if (tours) { %>
-      <h2>Активные туры (всего: <%= tours.length %>)</h2>
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>ID</th><th>Название</th><th>Страна</th><th>Город</th>
-            <th>Ночей</th><th>Цена</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% tours.forEach(t => { %>
-          <tr>
-            <td><%= t.id %></td>
-            <td><%= t.title %></td>
-            <td><%= t.destination_country %></td>
-            <td><%= t.destination_city %></td>
-            <td><%= t.nights %></td>
-            <td><%= t.total_price.toLocaleString('ru-RU') %> ₽</td>
-          </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    <% } %>
+    <!-- ═══ Шапка смены ═══ -->
+    <div class="ws-head">
+      <div>
+        <h1 class="ws-head__title">Рабочее место менеджера</h1>
+        <p class="ws-head__sub">оператор: <%= user.full_name || '—' %> · <%= user.email || '' %> · смена открыта</p>
+      </div>
+      <span class="ws-head__badge"><span class="ws-head__dot"></span>Терминал продаж · онлайн</span>
+    </div>
 
-    <% if (recentBookings) { %>
-      <h2>Мои последние заявки (всего: <%= recentBookings.length %>)</h2>
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>ID</th><th>Тур</th><th>Клиент</th><th>Телефон</th>
-            <th>Статус</th><th>Дата</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% recentBookings.forEach(b => { %>
-          <tr>
-            <td><%= b.id %></td>
-            <td><%= b.tour_title || '—' %></td>
-            <td><%= b.client_name %></td>
-            <td><%= b.client_phone %></td>
-            <td><%= b.status %></td>
-            <td><%= b.created_at.toLocaleString('ru-RU') %></td>
-          </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    <% } %>
+    <!-- ═══ 1+2. Каталог туров с фильтром ═══ -->
+    <div class="ws-block">
+      <div class="ws-block__head">
+        <h2 class="ws-block__title">Каталог туров</h2>
+        <span class="ws-block__counter">найдено: <strong><%= _tours.length %></strong> / всего активных в базе</span>
+      </div>
+
+      <!-- Форма фильтра -->
+      <form class="ws-filter" method="GET" action="/manager">
+        <div class="ws-filter__grid">
+          <div class="ws-field">
+            <label class="ws-label" for="mf-country">Страна</label>
+            <input class="ws-input" type="text" id="mf-country" name="destination_country" value="<%= val('destination_country', 'country') %>" placeholder="все">
+          </div>
+
+          <div class="ws-field">
+            <label class="ws-label" for="mf-city">Город</label>
+            <input class="ws-input" type="text" id="mf-city" name="destination_city" value="<%= val('destination_city', 'city') %>" placeholder="все">
+          </div>
+
+          <div class="ws-field">
+            <label class="ws-label" for="mf-date">Дата вылета</label>
+            <input class="ws-input" type="date" id="mf-date" name="departure_date" value="<%= val('departure_date') %>">
+          </div>
+
+          <div class="ws-field">
+            <label class="ws-label" for="mf-class">Класс</label>
+            <select class="ws-input ws-select" id="mf-class" name="flight_class">
+              <option value="">любой</option>
+              <option value="economy" <%= val('flight_class') === 'economy' ? 'selected' : '' %>>Эконом</option>
+              <option value="comfort" <%= val('flight_class') === 'comfort' ? 'selected' : '' %>>Комфорт</option>
+              <option value="business" <%= val('flight_class') === 'business' ? 'selected' : '' %>>Бизнес</option>
+            </select>
+          </div>
+
+          <div class="ws-field">
+            <label class="ws-label" for="mf-stars">Звёзды</label>
+            <select class="ws-input ws-select" id="mf-stars" name="hotel_stars">
+              <option value="">любые</option>
+              <% for (var s = 2; s <= 5; s++) { %>
+                <option value="<%= s %>" <%= val('hotel_stars', 'hotelStars') === String(s) ? 'selected' : '' %>><%= s %>★</option>
+              <% } %>
+            </select>
+          </div>
+
+          <div class="ws-field">
+            <label class="ws-label" for="mf-meal">Питание</label>
+            <select class="ws-input ws-select" id="mf-meal" name="hotel_meal">
+              <option value="">любое</option>
+              <option value="RO" <%= val('hotel_meal') === 'RO' ? 'selected' : '' %>>RO — Без питания</option>
+              <option value="BB" <%= val('hotel_meal') === 'BB' ? 'selected' : '' %>>BB — Завтраки</option>
+              <option value="HB" <%= val('hotel_meal') === 'HB' ? 'selected' : '' %>>HB — Полупансион</option>
+              <option value="AI" <%= val('hotel_meal') === 'AI' ? 'selected' : '' %>>AI — Всё включено</option>
+            </select>
+          </div>
+
+          <div class="ws-field">
+            <label class="ws-label" for="mf-transfer">Трансфер</label>
+            <select class="ws-input ws-select" id="mf-transfer" name="transfer_type">
+              <option value="">любой</option>
+              <option value="bus" <%= val('transfer_type') === 'bus' ? 'selected' : '' %>>Общий автобус</option>
+              <option value="private" <%= val('transfer_type') === 'private' ? 'selected' : '' %>>Личный автомобиль</option>
+            </select>
+          </div>
+
+          <div class="ws-field">
+            <label class="ws-label" for="mf-budget">Бюджет, ₽</label>
+            <input class="ws-input" type="number" id="mf-budget" name="maxPrice" value="<%= val('maxPrice', 'max_price') %>" min="0" step="1000" placeholder="без лимита">
+          </div>
+        </div>
+
+        <div class="ws-filter__actions">
+          <button class="btn btn--term btn--term-dark" type="submit">Найти</button>
+          <a class="btn btn--term btn--term-ghost" href="/manager">Сбросить</a>
+          <span class="ws-head__sub" style="margin-left:auto;">фильтры передаются в URL (GET)</span>
+        </div>
+      </form>
+
+      <!-- Таблица туров -->
+      <% if (_tours.length === 0) { %>
+        <p class="term-empty">Туров по заданным фильтрам не найдено. Измените параметры или сбросьте фильтр.</p>
+      <% } else { %>
+        <div class="term-scroll">
+          <table class="term-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Маршрут / вылет</th>
+                <th>Отель</th>
+                <th>Трансфер</th>
+                <th style="text-align:right;">Цена</th>
+                <th>Действие</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% _tours.forEach(function (t) { %>
+                <tr>
+                  <td class="term-id">#<%= t.id %></td>
+
+                  <td>
+                    <div class="term-route">
+                      <span><%= t.departure_city || '—' %></span>
+                      <span class="term-route__arrow">→</span>
+                      <span><%= t.destination_city || '—' %></span>
+                    </div>
+                    <div class="term-sub">
+                      <%= t.destination_country || '—' %> ·
+                      <% if (t.departure_at) { %>вылет <%= fmt(t.departure_at) %><% } else { %>дата не указана<% } %>
+                      <% if (t.flight_duration) { %> · в пути <%= t.flight_duration %><% } %>
+                    </div>
+                    <div class="term-sub">
+                      <strong><%= t.title %></strong>
+                      <% if (t.nights) { %> · <%= t.nights %> <%= plural(Number(t.nights), ['ночь', 'ночи', 'ночей']) %><% } %>
+                      <% if (t.flight_class) { %> · <%= flightClassMap[t.flight_class] || t.flight_class %> кл.<% } %>
+                    </div>
+                  </td>
+
+                  <td>
+                    <div><%= t.hotel_name || '—' %></div>
+                    <div class="term-sub">
+                      <span class="term-stars"><%= stars(t.hotel_stars) %></span>
+                      <% if (t.hotel_meal) { %> · <span class="term-badge term-badge--meal"><%= mealMap[t.hotel_meal] || t.hotel_meal %></span><% } %>
+                    </div>
+                  </td>
+
+                  <td>
+                    <span class="term-badge <%= t.transfer_type === 'private' ? 'term-badge--st-new' : 'term-badge--muted' %>">
+                      <%= transferMap[t.transfer_type] || '—' %>
+                    </span>
+                  </td>
+
+                  <td class="term-num"><%= price(t.total_price) %> ₽</td>
+
+                  <td>
+                    <button
+                      type="button"
+                      class="btn btn--term btn--term-dark"
+                      data-book-client
+                      data-tour-id="<%= t.id %>"
+                      data-tour-title="<%= t.title %>"
+                      data-route="<%= routeOf(t) %>"
+                      data-date="<%= t.departure_at ? fmt(t.departure_at) : 'дата не указана' %>"
+                      data-hotel="<%= hotelOf(t) %>"
+                      data-price="<%= price(t.total_price) %>"
+                    >Оформить клиента</button>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- ═══ 4. Мои оформления за смену ═══ -->
+    <div class="ws-block">
+      <div class="ws-block__head">
+        <h2 class="ws-block__title">Мои оформления за смену</h2>
+        <span class="ws-block__counter">заявок: <strong><%= _recent.length %></strong></span>
+      </div>
+
+      <% if (_recent.length === 0) { %>
+        <p class="term-empty">Оформлений ещё нет. Выберите тур в каталоге выше и нажмите «Оформить клиента».</p>
+      <% } else { %>
+        <div class="term-scroll">
+          <table class="term-table">
+            <thead>
+              <tr>
+                <th>№</th>
+                <th>Клиент</th>
+                <th>Телефон</th>
+                <th>Тур</th>
+                <th>Оформлено</th>
+                <th style="text-align:right;">Сумма</th>
+                <th>Статус</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% _recent.forEach(function (b) { %>
+                <%
+                  var st = statusMap[b.status] || { label: String(b.status || '—').toUpperCase(), cls: 'term-badge--muted' };
+                  var sum = (b.total_price != null) ? b.total_price : priceById[String(b.tour_id)];
+                %>
+                <tr>
+                  <td class="term-id">#<%= b.id %></td>
+                  <td><strong><%= b.client_name || '—' %></strong></td>
+                  <td class="term-mono"><%= b.client_phone || '—' %></td>
+                  <td>
+                    <% if (b.tour_id) { %>
+                      <a href="/tours/<%= b.tour_id %>"><%= b.tour_title || 'Тур #' + b.tour_id %></a>
+                    <% } else { %>
+                      <%= b.tour_title || '—' %>
+                    <% } %>
+                  </td>
+                  <td class="term-mono"><%= fmtDateTime(b.created_at) %></td>
+                  <td class="term-num"><%= price(sum) %> ₽</td>
+                  <td><span class="term-badge <%= st.cls %>"><%= st.label %></span></td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+
   </div>
 </section>
+
+<!-- ═══ 3. Боковая панель оформления клиента ═══ -->
+<div class="sidebar-overlay"></div>
+
+<aside class="sidebar sidebar--term" id="bookPanel" aria-label="Оформление клиента">
+  <div class="sidebar__header">
+    <div>
+      <h3 class="bp-aside__title">Оформление клиента</h3>
+      <p class="bp-aside__sub">новая заявка в систему</p>
+    </div>
+    <button class="modal__close" type="button" data-sidebar-close aria-label="Закрыть">×</button>
+  </div>
+
+  <div class="sidebar__body">
+    <!-- tour_id — обязательное поле по DATA_CONTRACT.md (bookings.tour_id, FK → tours.id) -->
+    <form method="POST" action="/manager/book" class="form bp-form">
+      <input type="hidden" name="tour_id" value="">
+
+      <!-- Краткая сводка выбранного тура -->
+      <div class="bp-summary">
+        <h4 class="bp-summary__title" data-bp="title">Тур не выбран</h4>
+        <div class="bp-summary__row">
+          <span class="bp-summary__k">Маршрут</span>
+          <span class="bp-summary__v" data-bp="route">—</span>
+        </div>
+        <div class="bp-summary__row">
+          <span class="bp-summary__k">Вылет</span>
+          <span class="bp-summary__v" data-bp="date">—</span>
+        </div>
+        <div class="bp-summary__row">
+          <span class="bp-summary__k">Отель</span>
+          <span class="bp-summary__v" data-bp="hotel">—</span>
+        </div>
+        <div class="bp-summary__total">
+          <span class="bp-summary__k">Итого, ₽</span>
+          <span class="bp-summary__sum" data-bp="price">—</span>
+        </div>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-client_name">ФИО клиента <span style="color:var(--clr-danger);">*</span></label>
+        <input class="form__input" type="text" id="bp-client_name" name="client_name" placeholder="Иванов Иван Иванович" autocomplete="off" maxlength="150" required>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-client_phone">Телефон клиента <span style="color:var(--clr-danger);">*</span></label>
+        <input class="form__input" type="tel" id="bp-client_phone" name="client_phone" placeholder="+7-900-000-00-00" autocomplete="off" inputmode="tel" maxlength="30" required>
+        <span class="bp-hint">формат произвольный, максимум 30 символов</span>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-comment">Заметка менеджера</label>
+        <textarea class="form__input form__textarea" id="bp-comment" name="comment" rows="4" maxlength="1000" placeholder="Пожелания клиента, номер брони у оператора, оплата…"></textarea>
+      </div>
+
+      <div class="bp-submit">
+        <button class="btn btn--primary btn--block btn--lg" type="submit">Отправить заявку</button>
+        <p class="bp-hint" style="margin:8px 0 0; text-align:center;">заявка сохранится за вами как за менеджером</p>
+      </div>
+    </form>
+  </div>
+</aside>
 
 <%- include('partials/footer') %>
