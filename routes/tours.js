@@ -1,116 +1,48 @@
-// Маршруты каталога: список туров с фильтрами и страница одного тура.
+// Маршруты каталога: список туров с фильтрами, страница одного тура и
+// самостоятельное бронирование.
 // Источник данных — таблица tours в PostgreSQL (схема из DATA_CONTRACT.md).
-// В шаблон уходят колонки БД как есть, поэтому в views/tours.ejs и views/tour.ejs
-// имена полей совпадают с именами колонок (destination_country, total_price...).
+// Сам SQL поиска живёт в services/tourService.js: тот же поиск понадобится
+// панели менеджера, и правила фильтрации должны остаться одними и теми же.
 
 const express = require('express');
 const pool = require('../db/pool');
+const { requireAuth } = require('../middlewares/auth');
+const {
+  searchTours,
+  findActiveTourById,
+  listActiveCountries,
+  parseSearchFilters,
+  FLIGHT_CLASS_LABELS,
+  HOTEL_MEAL_LABELS,
+  TRANSFER_TYPE_LABELS,
+  label,
+} = require('../services/tourService');
 
 const router = express.Router();
 
-// Словари кодов из CHECK-ограничений схемы в человекочитаемый текст (п. 2 контракта)
-const FLIGHT_CLASS_LABELS = {
-  economy: 'Эконом',
-  comfort: 'Комфорт',
-  business: 'Бизнес',
-};
-
-const HOTEL_MEAL_LABELS = {
-  RO: 'Без питания',
-  BB: 'Завтраки',
-  HB: 'Полупансион',
-  AI: 'Всё включено',
-};
-
-const TRANSFER_TYPE_LABELS = {
-  bus: 'Групповой автобус',
-  private: 'Индивидуальный автомобиль',
-};
-
-// Разворачивает строку БД-кода в подпись для шаблона.
-// Неизвестный код отдаём как есть, чтобы страница не падала из-за новой роли/кода.
-function label(dict, code) {
-  return dict[code] || code;
-}
-
-// Читает фильтры из query-строки. Пустые значения и мусор превращает в null,
-// чтобы они не попали в SQL и не сбивали подсветку полей формы после поиска.
-function parseFilters(query) {
-  const toText = (value) =>
-    typeof value === 'string' && value.trim() ? value.trim() : null;
-
-  const toPositiveNumber = (value) => {
-    if (value === undefined || value === null || String(value).trim() === '') {
-      return null;
-    }
-    const number = Number(value);
-    return Number.isFinite(number) && number > 0 ? number : null;
-  };
-
-  return {
-    country: toText(query.country),
-    city: toText(query.city),
-    maxPrice: toPositiveNumber(query.maxPrice),
-    nights: toPositiveNumber(query.nights),
-    hotelStars: toPositiveNumber(query.hotelStars),
-  };
-}
-
-// GET /tours — активные туры (+ ?country=&city=&maxPrice=&nights=&hotelStars=)
-// В шаблон отдаём tours и filters: filters нужны, чтобы форма поиска
-// не сбрасывала уже выбранные значения (п. 2 раздела 4 контракта).
+// GET /tours — активные туры + фильтры из query-строки
+// (?destination_country=&destination_city=&departure_city=&departure_date=
+//  &flight_class=&hotel_meal=&transfer_type=&hotel_stars=&maxPrice=&nights=)
+//
+// В шаблон отдаём tours, countries и filters. countries нужен для выпадающего
+// списка стран, filters — чтобы поля формы не сбрасывались после поиска
+// (п. 2 раздела 4 контракта).
 router.get('/', async (req, res, next) => {
   try {
-    const filters = parseFilters(req.query);
+    const filters = parseSearchFilters(req.query);
 
-    // Условие собираем по частям, значения всегда передаём отдельным массивом —
-    // так query-параметры не становятся частью SQL-текста (защита от инъекций).
-    const where = ['t.is_active = TRUE'];
-    const values = [];
-
-    const addCondition = (condition, value) => {
-      values.push(value);
-      where.push(condition.replace('?', `$${values.length}`));
-    };
-
-    if (filters.country) {
-      addCondition('t.destination_country = ?', filters.country);
-    }
-    if (filters.city) {
-      addCondition('t.destination_city ILIKE ?', `%${filters.city}%`);
-    }
-    if (filters.maxPrice !== null) {
-      addCondition('t.total_price <= ?', filters.maxPrice);
-    }
-    // Ночи и звёзды фильтруем «не меньше»: гость обычно ищет подлиннее и дороже
-    if (filters.nights !== null) {
-      addCondition('t.nights >= ?', filters.nights);
-    }
-    if (filters.hotelStars !== null) {
-      addCondition('t.hotel_stars >= ?', filters.hotelStars);
-    }
-
-    const [toursResult, countriesResult] = await Promise.all([
-      pool.query(
-        `SELECT t.*
-         FROM tours t
-         WHERE ${where.join(' AND ')}
-         ORDER BY t.total_price ASC, t.id ASC`,
-        values
-      ),
-      // Список стран для выпадающего списка в форме фильтров
-      pool.query(
-        `SELECT DISTINCT destination_country
-         FROM tours
-         WHERE is_active = TRUE
-         ORDER BY destination_country`
-      ),
+    // Поиск и список стран независимы, поэтому ждём оба одновременно
+    const [tours, countries] = await Promise.all([
+      searchTours(req.query),
+      listActiveCountries(),
     ]);
 
     res.render('tours', {
       title: 'Все туры — Туристический сайт',
-      tours: toursResult.rows,
-      countries: countriesResult.rows.map((row) => row.destination_country),
+      tours,
+      countries,
+      // filters — те же имена, что и параметры query-строки и колонки БД,
+      // поэтому форма поиска после фильтрации показывает выбранные значения
       filters,
     });
   } catch (err) {
@@ -118,23 +50,11 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// GET /tours/:id — один активный тур. Скрытый (is_active = false) и несуществующий
-// дают одинаковый ответ: next() → общий 404-обработчик из server.js.
+// GET /tours/:id — один активный тур. Скрытый (is_active = false) и
+// несуществующий дают одинаковый ответ: next() → общий 404-обработчик.
 router.get('/:id', async (req, res, next) => {
   try {
-    const id = Number(req.params.id);
-
-    // /tours/abc и /tours/-5 не доходят до базы: сразу 404
-    if (!Number.isInteger(id) || id <= 0) {
-      return next();
-    }
-
-    const result = await pool.query(
-      'SELECT * FROM tours WHERE id = $1 AND is_active = TRUE',
-      [id]
-    );
-    const tour = result.rows[0];
-
+    const tour = await findActiveTourById(req.params.id);
     if (!tour) {
       return next();
     }
@@ -142,10 +62,48 @@ router.get('/:id', async (req, res, next) => {
     res.render('tour', {
       title: `${tour.title} — Туристический сайт`,
       tour,
+      // Подписи кодов из БД (economy / BB / bus) считает сервис —
+      // шаблоны про словари кодов ничего не знают
       flightClassLabel: label(FLIGHT_CLASS_LABELS, tour.flight_class),
       mealLabel: label(HOTEL_MEAL_LABELS, tour.hotel_meal),
       transferLabel: label(TRANSFER_TYPE_LABELS, tour.transfer_type),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /tours/:id/book — самостоятельная бронировка тура клиентом.
+// Защищён requireAuth: гость попадёт на /login?next=/tours/<id>/book, а после
+// входа форма вернёт его сюда же (скрытое поле next в views/login.ejs).
+//
+// По п. 3 контракта заявка оформляется на себя: user_id = текущий клиент,
+// manager_id = NULL (оформил не менеджер), status = 'new'.
+router.post('/:id/book', requireAuth, async (req, res, next) => {
+  try {
+    const tour = await findActiveTourById(req.params.id);
+
+    // Скрытый или несуществующий тур забронировать нельзя
+    if (!tour) {
+      return next();
+    }
+
+    // req.user кладёт attachCurrentUser: id, email, full_name, phone, role.
+    // Контакты берём из профиля, а не из формы: клиенту не нужно вводить их
+    // каждый раз, и он не может подставить чужие данные в свою заявку.
+    const comment =
+      typeof req.body.comment === 'string' && req.body.comment.trim()
+        ? req.body.comment.trim()
+        : null;
+
+    await pool.query(
+      `INSERT INTO bookings (tour_id, user_id, manager_id, client_name, client_phone, comment, status)
+       VALUES ($1, $2, NULL, $3, $4, $5, 'new')`,
+      [tour.id, req.user.id, req.user.full_name, req.user.phone, comment]
+    );
+
+    // booked=1 — сигнал для личного кабинета показать подтверждение
+    res.redirect('/profile?booked=1');
   } catch (err) {
     next(err);
   }

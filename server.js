@@ -5,6 +5,7 @@ const session = require('express-session');
 const indexRouter = require('./routes/index');
 const toursRouter = require('./routes/tours');
 const authRouter = require('./routes/auth');
+const profileRouter = require('./routes/profile');
 const { attachCurrentUser, requireAuth, requireRole } = require('./middlewares/auth');
 const pool = require('./db/pool');
 
@@ -53,6 +54,9 @@ app.use('/auth', authRouter);
 // Алиасы /login, /register, /logout: на них редиректит requireAuth,
 // а формы работают и по основному префиксу /auth/*
 app.use('/', authRouter);
+// Личный кабинет клиента (п. 3 раздела 4 контракта): его брони с деталями тура.
+// requireAuth внутри роутера — гость уходит на /login?next=/profile.
+app.use('/profile', profileRouter);
 
 // Панель админа (п. 5 контракта): все туры (включая скрытые), все заявки,
 // все пользователи (без password_hash).

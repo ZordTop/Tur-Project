@@ -26,6 +26,8 @@
         <div class="nav__auth">
           <% if (typeof currentUser !== 'undefined' && currentUser) { %>
             <span class="nav__auth__name"><%= currentUser.full_name %></span>
+            <!-- Личный кабинет доступен любой роли: заявка создаётся от своего user_id -->
+            <a class="nav__link nav__link--auth" href="/profile">Мои заявки</a>
             <% if (currentUser.role === 'admin') { %>
               <a class="nav__link nav__link--auth" href="/admin">Админка</a>
             <% } %>

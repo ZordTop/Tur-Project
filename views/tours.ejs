@@ -14,11 +14,11 @@
     -->
     <form class="filters" method="get" action="/tours">
       <div class="filters__field">
-        <label class="filters__label" for="country">Страна</label>
-        <select class="filters__input" id="country" name="country">
+        <label class="filters__label" for="destination_country">Страна</label>
+        <select class="filters__input" id="destination_country" name="destination_country">
           <option value="">Любая</option>
           <% countries.forEach((country) => { %>
-            <option value="<%= country %>" <%= filters.country === country ? 'selected' : '' %>>
+            <option value="<%= country %>" <%= filters.destination_country === country ? 'selected' : '' %>>
               <%= country %>
             </option>
           <% }) %>
@@ -26,14 +26,14 @@
       </div>
 
       <div class="filters__field">
-        <label class="filters__label" for="city">Город или курорт</label>
+        <label class="filters__label" for="destination_city">Город или курорт</label>
         <input
           class="filters__input"
           type="text"
-          id="city"
-          name="city"
+          id="destination_city"
+          name="destination_city"
           placeholder="Напр. Сочи"
-          value="<%= filters.city || '' %>"
+          value="<%= filters.destination_city || '' %>"
         >
       </div>
 
@@ -52,7 +52,7 @@
       </div>
 
       <div class="filters__field">
-        <label class="filters__label" for="nights">Ночей не меньше</label>
+        <label class="filters__label" for="nights">Ночей</label>
         <input
           class="filters__input"
           type="number"
@@ -66,11 +66,11 @@
       </div>
 
       <div class="filters__field">
-        <label class="filters__label" for="hotelStars">Отель от</label>
-        <select class="filters__input" id="hotelStars" name="hotelStars">
+        <label class="filters__label" for="hotel_stars">Отель от</label>
+        <select class="filters__input" id="hotel_stars" name="hotel_stars">
           <option value="">Любых звёзд</option>
           <% [2, 3, 4, 5].forEach((stars) => { %>
-            <option value="<%= stars %>" <%= filters.hotelStars === stars ? 'selected' : '' %>>
+            <option value="<%= stars %>" <%= filters.hotel_stars === stars ? 'selected' : '' %>>
               <%= stars %>★ и выше
             </option>
           <% }) %>

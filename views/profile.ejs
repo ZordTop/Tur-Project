@@ -1,0 +1,87 @@
+<%- include('partials/header') %>
+
+<section class="section">
+  <div class="container">
+    <h1 class="page-title">Личный кабинет</h1>
+    <p class="page-subtitle">
+      Здравствуйте, <%= currentUser.full_name %>! Здесь собраны все ваши заявки на туры.
+    </p>
+
+    <% if (justBooked) { %>
+      <p class="empty">
+        Заявка создана! Менеджер свяжется с вами для подтверждения.
+        <a href="/tours">Вернуться в каталог</a>
+      </p>
+    <% } %>
+
+    <% if (bookings.length === 0) { %>
+      <p class="empty">
+        У вас пока нет заявок.
+        <a href="/tours">Выберите тур</a> и нажмите «Забронировать».
+      </p>
+    <% } else { %>
+      <p class="results-count">Ваших заявок: <%= bookings.length %></p>
+
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>№</th>
+            <th>Тур</th>
+            <th>Направление</th>
+            <th>Вылет</th>
+            <th>Цена</th>
+            <th>Статус</th>
+            <th>Комментарий</th>
+            <th>Создана</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% bookings.forEach(function (b) { %>
+          <tr>
+            <td><%= b.id %></td>
+            <td>
+              <% if (b.tour_title && b.tour_is_active) { %>
+                <a href="/tours/<%= b.tour_id %>"><%= b.tour_title %></a>
+              <% } else if (b.tour_title) { %>
+                <%= b.tour_title %> <span class="card__rating">(снят с продажи)</span>
+              <% } else { %>
+                Тур снят с продажи
+              <% } %>
+            </td>
+            <td>
+              <% if (b.destination_country) { %>
+                <%= b.destination_country %> · <%= b.destination_city %>
+              <% } else { %>
+                —
+              <% } %>
+            </td>
+            <td>
+              <% if (b.departure_at) { %>
+                <%= b.departure_at.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) %>
+              <% } else { %>
+                —
+              <% } %>
+            </td>
+            <td>
+              <% if (b.total_price) { %>
+                <%= b.total_price.toLocaleString('ru-RU') %> ₽
+              <% } else { %>
+                —
+              <% } %>
+            </td>
+            <td><%= statusLabels[b.status] || b.status %></td>
+            <td><%= b.comment || '—' %></td>
+            <td><%= b.created_at.toLocaleString('ru-RU') %></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+
+    <div class="form__actions">
+      <a class="btn btn--primary" href="/tours">Смотреть туры</a>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>
