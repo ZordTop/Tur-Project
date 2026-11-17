@@ -383,4 +383,57 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // ── 11. Копирование в буфер обмена (CRM: серия и номер паспорта) ──
+  // HTML: <button data-copy="1234 567890">Скопировать</button>
+  // Отклик: кнопка на 1.5 сек показывает «Скопировано!».
+  const copyText = async (text) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    // Fallback для старых браузеров и небезопасного контекста (http)
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+  };
+
+  document.querySelectorAll('[data-copy]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const text = btn.getAttribute('data-copy') || '';
+      if (!text) return;
+
+      const label = btn.textContent;
+      try {
+        await copyText(text);
+        btn.textContent = 'Скопировано!';
+        btn.classList.add('is-copied');
+      } catch (err) {
+        console.error('Не удалось скопировать:', err);
+        btn.textContent = 'Ошибка';
+      }
+
+      setTimeout(() => {
+        btn.textContent = label;
+        btn.classList.remove('is-copied');
+      }, 1500);
+    });
+  });
+
+  // ── 12. Подтверждение опасных действий ──
+  // HTML: <form method="POST" data-confirm="Отменить бронь?">...</form>
+  document.querySelectorAll('form[data-confirm]').forEach((form) => {
+    form.addEventListener('submit', (e) => {
+      const message = form.getAttribute('data-confirm') || 'Подтвердить действие?';
+      if (!window.confirm(message)) {
+        e.preventDefault();
+      }
+    });
+  });
 });

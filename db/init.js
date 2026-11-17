@@ -110,6 +110,25 @@ const initSQL = `
     created_at    TIMESTAMP NOT NULL DEFAULT now()
   );
 
+  -- ─── CRM-поля туриста (этап 4): досье и защищённые файлы ───
+  -- Отдельный ALTER, а не колонки внутри CREATE TABLE: так миграция
+  -- применяется и к уже существующей базе (IF NOT EXISTS делает её
+  -- безопасной при повторном запуске init.js).
+  --   client_photo           — имя файла в uploads/photos/
+  --   birth_date             — дата рождения туриста
+  --   passport_series_number — серия и номер паспорта (строка «1234 567890»)
+  --   passport_issued_by     — кем выдан
+  --   passport_expires_at    — срок действия
+  --   passport_scan          — имя файла в uploads/passports/
+  ALTER TABLE bookings
+    ADD COLUMN IF NOT EXISTS client_photo           VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS birth_date             DATE,
+    ADD COLUMN IF NOT EXISTS passport_series_number VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS passport_issued_by     VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS passport_expires_at    DATE,
+    ADD COLUMN IF NOT EXISTS passport_scan          VARCHAR(255);
+
+
   -- ─── Индексы: почему поиск становится быстрее ───
   -- Без индекса база перечитывает ВСЕ строки таблицы подряд, пока найдёт
   -- подходящие. Индекс — это заранее отсортированный указатель, как оглавление
