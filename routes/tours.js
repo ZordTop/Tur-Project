@@ -9,8 +9,8 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middlewares/auth');
 // Единая обработка фильтров для каталога и панели менеджера (см. utils/tourFilters.js)
 const { parseFilters, buildConditions } = require('../utils/tourFilters');
-// Поиск одного активного тура с валидацией id (см. services/tourService.js)
-const { findActiveTourById } = require('../services/tourService');
+// Нормализация телефона (см. utils/validators.js)
+const { validatePhone } = require('../utils/validators');
 
 const router = express.Router();
 

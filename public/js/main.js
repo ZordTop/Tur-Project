@@ -436,4 +436,129 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // ── 13. Конструктор туров (админ-панель, Этап 5) ──
+  (function tourBuilder() {
+    const toggle = document.getElementById('tour-builder-toggle');
+    const body = document.getElementById('tour-builder-body');
+    const form = document.getElementById('tour-form');
+    if (!form) return;
+
+    const formTitle = document.getElementById('tour-form-title');
+    const submitBtn = document.getElementById('tour-form-submit');
+    const cancelBtn = document.getElementById('tour-form-cancel-edit');
+    const totalPreview = document.getElementById('tour-total-preview');
+
+    const priceFields = [
+      form.querySelector('[name="flight_price"]'),
+      form.querySelector('[name="hotel_price"]'),
+      form.querySelector('[name="transfer_price"]'),
+    ];
+
+    // Расчёт итоговой цены
+    function updateTotal() {
+      let sum = 0;
+      priceFields.forEach((f) => {
+        const v = Number(f.value);
+        if (Number.isFinite(v) && v >= 0) sum += v;
+      });
+      // Форматирование с пробелами: 85 400
+      totalPreview.textContent = sum.toLocaleString('ru-RU');
+    }
+
+    priceFields.forEach((f) => {
+      if (f) f.addEventListener('input', updateTotal);
+    });
+
+    // Сворачивание/разворачивание конструктора
+    if (toggle && body) {
+      toggle.addEventListener('click', () => {
+        const isVisible = body.style.display !== 'none';
+        body.style.display = isVisible ? 'none' : 'block';
+        toggle.querySelector('.tour-builder__toggle-icon').textContent = isVisible ? '＋' : '−';
+      });
+    }
+
+    // Форматирование ISO-даты в datetime-local: YYYY-MM-DDTHH:mm
+    function toDatetimeLocal(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      const pad = (n) => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+        + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    // Режим редактирования: заполняем форму данными тура
+    document.querySelectorAll('[data-edit-tour]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        let tour;
+        try {
+          tour = JSON.parse(btn.getAttribute('data-tour'));
+        } catch (e) {
+          console.error('Не удалось разобрать данные тура:', e);
+          return;
+        }
+
+        // Раскрываем блок конструктора если скрыт
+        if (body && body.style.display === 'none') {
+          body.style.display = 'block';
+          if (toggle) toggle.querySelector('.tour-builder__toggle-icon').textContent = '−';
+        }
+
+        // Заполняем поля
+        const setVal = (name, value) => {
+          const el = form.querySelector('[name="' + name + '"]');
+          if (el) el.value = value != null ? String(value) : '';
+        };
+
+        setVal('title', tour.title);
+        setVal('description', tour.description);
+        setVal('image', tour.image);
+        setVal('rating', tour.rating);
+        setVal('nights', tour.nights);
+        setVal('departure_city', tour.departure_city);
+        setVal('destination_country', tour.destination_country);
+        setVal('destination_city', tour.destination_city);
+        setVal('departure_at', toDatetimeLocal(tour.departure_at));
+        setVal('arrival_at', toDatetimeLocal(tour.arrival_at));
+        setVal('flight_duration', tour.flight_duration);
+        setVal('flight_class', tour.flight_class);
+        setVal('flight_price', tour.flight_price);
+        setVal('hotel_name', tour.hotel_name);
+        setVal('hotel_stars', tour.hotel_stars);
+        setVal('hotel_meal', tour.hotel_meal);
+        setVal('hotel_price', tour.hotel_price);
+        setVal('transfer_type', tour.transfer_type);
+        setVal('transfer_price', tour.transfer_price);
+
+        // Меняем заголовок и action формы
+        formTitle.textContent = 'Редактирование тура #' + tour.id;
+        form.action = '/admin/tours/' + tour.id + '/edit';
+        submitBtn.textContent = 'Сохранить изменения';
+        cancelBtn.style.display = 'inline-flex';
+
+        // Обновляем превью итоговой цены
+        updateTotal();
+
+        // Прокручиваем к форме
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    // Отмена редактирования: сброс формы в режим создания
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        form.reset();
+        form.action = '/admin/tours/create';
+        formTitle.textContent = 'Создание нового тура';
+        submitBtn.textContent = 'Создать тур';
+        cancelBtn.style.display = 'none';
+        totalPreview.textContent = '0';
+      });
+    }
+
+    // Первичный расчёт при загрузке (на случай если поля уже заполнены сервером)
+    updateTotal();
+  })();
 });
