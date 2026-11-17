@@ -296,6 +296,8 @@
   <div class="sidebar__body">
     <!-- tour_id — обязательное поле по DATA_CONTRACT.md (bookings.tour_id, FK → tours.id) -->
     <form method="POST" action="/manager/book" class="form bp-form">
+      <% // CSRF-токен (middlewares/csrf.js) — без него POST /manager/book отклоняется с 403 %>
+      <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
       <input type="hidden" name="tour_id" value="">
 
       <!-- Краткая сводка выбранного тура -->

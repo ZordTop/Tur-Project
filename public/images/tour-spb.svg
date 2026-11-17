@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e0f2fe"/>
+      <stop offset="1" stop-color="#7dd3fc"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#0369a1"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="250" fill="url(#sky)"/>
+  <rect x="100" y="100" width="60" height="150" fill="#475569" rx="3"/>
+  <polygon points="130,60 110,100 150,100" fill="#334155"/>
+  <rect x="200" y="120" width="50" height="130" fill="#64748b" rx="3"/>
+  <polygon points="225,90 205,120 245,120" fill="#475569"/>
+  <rect x="500" y="80" width="80" height="170" fill="#334155" rx="3"/>
+  <polygon points="540,40 510,80 570,80" fill="#1e293b"/>
+  <rect x="620" y="130" width="50" height="120" fill="#475569" rx="3"/>
+  <polygon points="645,100 625,130 665,130" fill="#334155"/>
+  <rect y="250" width="800" height="250" fill="url(#water)"/>
+  <path d="M0 260 Q200 280 400 260 T800 260 V500 H0 Z" fill="#0ea5e9" opacity="0.3"/>
+  <text x="40" y="440" font-family="Arial, sans-serif" font-size="44" font-weight="bold" fill="#f0f9ff">Санкт-Петербург · Невский</text>
+</svg>

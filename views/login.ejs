@@ -51,9 +51,13 @@
       <% } %>
 
       <form method="post" action="/login" class="form auth-card__form">
-        <% // Бэкенд читает req.body.next и возвращает туда после входа %>
-        <% if (typeof next !== 'undefined' && next) { %>
-          <input type="hidden" name="next" value="<%= next %>">
+        <% // CSRF-токен (middlewares/csrf.js) — без него POST отклоняется с 403 %>
+        <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+        <% // Бэкенд читает req.body.next (safeNext) и возвращает туда после входа.
+           // Бэкенд отдаёт переменную nextUrl — раньше шаблон обращался к next,
+           // поэтому поле всегда рендерилось пустым. %>
+        <% if (typeof nextUrl !== 'undefined' && nextUrl) { %>
+          <input type="hidden" name="next" value="<%= nextUrl %>">
         <% } %>
 
         <div class="form__group">

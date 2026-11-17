@@ -38,9 +38,10 @@ services:
       # Данные переживают удаление контейнера: docker compose down их НЕ трогает.
       # Полная очистка БД: docker compose down -v
       - pgdata:/var/lib/postgresql/data
-    ports:
-      # Проброс наружу для отладки; наружный порт меняется через DB_PORT
-      - "${DB_PORT:-5432}:5432"
+    # Порт БД наружу здесь НЕ пробрасывается: в production приложение
+    # достучится до db по внутреннему имени сервиса, а открывать 5432 на
+    # хосте — только подставлять базу под перебор паролей. Для отладки
+    # (DBeaver/pgAdmin с машины) проброс есть в docker-compose.dev.yml.
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tur -d tur_project"]

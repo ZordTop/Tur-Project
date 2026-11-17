@@ -86,7 +86,7 @@ async function seed() {
     {
       title: 'Солнечный Сочи: всё включено',
       description: 'Неделя на черноморском побережье: пляжи, канатная дорога на Красную Поляну и прогулки по Олимпийскому парку.',
-      image: '/images/tour-sochi.jpg',
+      image: '/images/tour-sochi.svg',
       rating: 4.7,
       nights: 7,
       // Перелёт
@@ -112,7 +112,7 @@ async function seed() {
     {
       title: 'Стамбул: две части света',
       description: 'Айя-София, Голубая мечеть, Гранд-базар и прогулка по Босфору на закате.',
-      image: '/images/tour-istanbul.jpg',
+      image: '/images/tour-istanbul.svg',
       rating: 4.8,
       nights: 5,
       // Перелёт
@@ -138,7 +138,7 @@ async function seed() {
     {
       title: 'Прага: сказка на Влтаве',
       description: 'Карлов мост на рассвете, Пражский град, Староместская площадь и дегустация чешского пива.',
-      image: '/images/tour-prague.jpg',
+      image: '/images/tour-prague.svg',
       rating: 4.6,
       nights: 6,
       // Перелёт
@@ -164,7 +164,7 @@ async function seed() {
     {
       title: 'Анталья: экзотика и роскошь',
       description: 'Пляжный отдых пятизвёздочного уровня: собственный пляж, аквапарк и SPA-центр.',
-      image: '/images/tour-antalya.jpg',
+      image: '/images/tour-antalya.svg',
       rating: 4.9,
       nights: 10,
       // Перелёт
@@ -190,7 +190,7 @@ async function seed() {
     {
       title: 'Санкт-Петербург: белые ночи',
       description: 'Эрмитаж, Петергоф, прогулка по Невскому проспекту и разводные мосты.',
-      image: '/images/tour-spb.jpg',
+      image: '/images/tour-spb.svg',
       rating: 4.5,
       nights: 4,
       // Перелёт
@@ -244,9 +244,13 @@ async function seed() {
 }
 
 // seed() — async-функция, поэтому ошибка приходит не в try/catch, а в промис.
-// .catch перехватывает её, печатает текст и завершает процесс с кодом 1,
+// .catch перехватывает её, печатает текст и ставит код возврата 1,
 // чтобы Docker или CI увидели: что-то пошло не так.
-seed().catch((err) => {
-  console.error('❌ Ошибка seed:', err.message);
-  process.exit(1);
-});
+// pool.end() вызываем в finally: без него процесс остался бы висеть
+// с открытыми сокетами к PostgreSQL (Node не завершается, пока пул жив).
+seed()
+  .catch((err) => {
+    console.error('❌ Ошибка seed:', err.message);
+    process.exitCode = 1;
+  })
+  .finally(() => pool.end());
