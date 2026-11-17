@@ -2,7 +2,9 @@
 
 > **Назначение:** Моя рабочая памятка. В новом чате достаточно написать «прочитай KODAREAD.md» — и я знаю структуру проекта, историю исправлений и что осталось на будущее.
 >
-> **Статус:** Все известные баги из первой ревизии исправлены и проверены интеграционным прогоном (71/71). Последнее обновление: 2026-11-17.
+> **Статус:** Все известные баги исправлены, проверены интеграционным прогоном (71/71) и **закоммичены командой** (`57bd0c5 fix`, HEAD ветки work). PROJECT_ANALYSIS.md переписан под текущее состояние (2026-11-17).
+>
+> **Свежие изменения команды после моих правок:** в `public/images` добавлены реальные фото туров (`tour-sochi.jpg` и т.д., коммит `a144a29`), хотя seed.js указывает на мои SVG-заглушки — переключение seed на jpg остаётся на решение команды.
 
 ---
 
@@ -25,7 +27,7 @@ Tur-Project/
 ├── Dockerfile / docker-compose.yml / docker-compose.dev.yml
 ├── .gitignore / .dockerignore
 ├── DATA_CONTRACT.md       ← контракт таблиц и переменных шаблонов
-├── PROJECT_ANALYSIS.md    ← ⚠️ устарел: описывает состояние ДО исправлений
+├── PROJECT_ANALYSIS.md    ← переписан 2026-11-17 под текущее состояние
 │
 ├── routes/
 │   ├── index.js           ← GET /, /healthz, /about
@@ -47,7 +49,8 @@ Tur-Project/
 └── public/
     ├── css/style.css      ← есть .alert--success/--error/--info
     ├── js/main.js         ← бургер, табы, сайдбар менеджера, restoreFiltersFromUrl
-    └── images/*.svg       ← ⭐ новое: 5 заглушек туров (sochi/istanbul/prague/antalya/spb)
+    └── images/            ← реальные фото туров (.jpg/.webp — добавлены командой
+                             в a144a29) + мои 5 SVG-заглушек; seed.js ссылается на .svg
 ```
 
 **Удалено:** `data/tours.js` (мёртвое in-memory хранилище, бэкенд его не импортировал).
@@ -95,7 +98,7 @@ urlencoded/json → static → trust proxy → session → flash → csrf → at
 | DEAD-01 | data/tours.js не использовался | Файл и папка удалены |
 | DEAD-02 | `flightClassLabel/mealLabel/transferLabel` не читались шаблоном | Убраны из routes/tours.js (маппинги живут в EJS) |
 | GAP-01 | Админка была read-only | +4 CRUD-маршрута: `/admin/tours/:id/active`, `/admin/bookings/:id/status`, `/admin/users/:id/role`, `/admin/users/:id/block` (с CHECK-списками допустимых значений и защитой от «понизить/заблокировать самого себя») |
-| GAP-02 | public/images пуст → битые картинки | 5 SVG-заглушек; seed.js переведён на `.svg` |
+| GAP-02 | public/images пуст → битые картинки | 5 SVG-заглушек; seed.js переведён на `.svg`. **Open item:** команда позже добавила реальные `tour-*.jpg` — seed можно переключить на них |
 | GAP-03 | Не было CSRF | `middlewares/csrf.js` (crypto.timingSafeEqual, токен в сессии) — БЕЗ npm-зависимостей |
 | GAP-04 | Не было валидации email/телефона | EMAIL_RE/PHONE_RE в routes/auth.js + `normalizeEmail` (trim+lowercase, иначе UNIQUE обходится регистром) |
 | GAP-05 | Не было flash-сообщений | `middlewares/flash.js` + вывод в header.ejs |
@@ -127,7 +130,7 @@ urlencoded/json → static → trust proxy → session → flash → csrf → at
 - **Нет rate-limit на /login** — перебор паролей не замедляется.
 - **bcrypt 10 раундов синхронно в async-хендлере** (bcryptjs, не нативный bcrypt) — ок для учебного, тяжело под нагрузкой.
 - **Нет тестов/CI/lintера** в репозитории.
-- **PROJECT_ANALYSIS.md устарел** (описывает мир до исправлений: пишет про data/tours.js, 44 строки в main.js и т.п.). README тоже не упоминает /profile и CSRF — обновить по мере сил.
+- **README.md частично устарел** — в структуре упоминает удалённый `data/`, в стеке нет PostgreSQL, нет шагов init/seed и переменных DATABASE_URL/SESSION_SECRET. PROJECT_ANALYSIS.md актуален (переписан 2026-11-17).
 - **`restoreFiltersFromUrl` в main.js** теперь избыточен (бэкенд всегда отдаёт `filters`), но безвреден — оставлен как fallback.
 - В tours.ejs функция `val()` принимает старые алиасы (`country`, `city`, `hotelStars`, `max_price`) — harmless legacy, можно почистить.
 
