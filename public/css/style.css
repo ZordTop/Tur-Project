@@ -3532,3 +3532,27 @@ body.role-admin .header .burger span { background: #e2e8f0; }
     font-size: 1.3rem;
   }
 }
+
+/* ── 28. Мини-превью файлов (Этап 3) ───────────────────────────────────────── */
+
+.file-preview__thumb {
+  max-width: 180px;
+  max-height: 140px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  object-fit: contain;
+  display: block;
+}
+
+.file-preview__info {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--clr-muted);
+  margin-top: 4px;
+}
+
+.file-preview__error {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--clr-danger);
+}

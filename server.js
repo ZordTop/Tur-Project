@@ -13,7 +13,8 @@ const csrf = require('./middlewares/csrf');
 const flash = require('./middlewares/flash');
 const pool = require('./db/pool');
 const { parseFilters, buildConditions } = require('./utils/tourFilters');
-const { validatePhone } = require('./utils/validators');
+const { validateBookingData } = require('./utils/validators');
+const { uploadBookingDocs, removeUploadedFiles, getUploadedFileName } = require('./middlewares/upload');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -156,24 +157,11 @@ app.get('/manager', requireAuth, requireRole('admin', 'manager'), async (req, re
 });
 
 // POST /manager/book — заявка, оформленная менеджером.
-// Форма в manager.ejs отправляет tour_id, client_name, client_phone, comment.
-app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), async (req, res, next) => {
+// Форма в manager.ejs отправляет анкету туриста и файлы в multipart/form-data.
+// middleware uploadBookingDocs обрабатывает файлы, затем хендлер валидирует паспортные данные.
+app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), uploadBookingDocs, async (req, res, next) => {
   try {
     const tourId = Number(req.body.tour_id);
-    const client_name = String(req.body.client_name || '').trim().slice(0, 150);
-    const comment = String(req.body.comment || '').trim().slice(0, 1000);
-
-    // Телефон нормализуем через общий валидатор: в базу должны попадать только
-    // цифры (по контракту — 11 цифр). Если менеджер ввел иностранный или
-    // нестандартный номер, валидатор вернёт null — тогда сохраняем строку как
-    // есть, не блокируя оформление: заявка важнее формата телефона.
-    const rawPhone = String(req.body.client_phone || '').trim();
-    const client_phone = validatePhone(rawPhone) || rawPhone.slice(0, 30);
-
-    if (!client_name || !client_phone) {
-      req.flash('error', 'Заполните ФИО и телефон клиента.');
-      return res.redirect('/manager');
-    }
 
     // Проверяем, что тур существует.
     const tourResult = await pool.query(
@@ -181,19 +169,40 @@ app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), async (r
       [tourId]
     );
     if (!tourResult.rows[0]) {
+      removeUploadedFiles(req);
       req.flash('error', 'Выбранный тур не найден.');
       return res.redirect('/manager');
     }
 
+    // Валидация анкеты туриста (без дефолтов — менеджер заполняет все поля).
+    const validation = validateBookingData(req.body);
+
+    if (!validation.ok) {
+      removeUploadedFiles(req);
+      req.flash('error', validation.errors.join(' '));
+      return res.redirect('/manager');
+    }
+
+    // Сохраняем имена загруженных файлов (или null).
+    const client_photo = getUploadedFileName(req, 'client_photo');
+    const passport_scan = getUploadedFileName(req, 'passport_scan');
+
+    const v = validation.values;
+
     await pool.query(
-      `INSERT INTO bookings (tour_id, user_id, manager_id, client_name, client_phone, comment, status)
-       VALUES ($1, NULL, $2, $3, $4, $5, 'new')`,
-      [tourId, req.user.id, client_name, client_phone, comment || null]
+      `INSERT INTO bookings (tour_id, user_id, manager_id, client_name, client_phone,
+       birth_date, passport_series_number, passport_issued_by, passport_expires_at,
+       client_photo, passport_scan, comment, status)
+       VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'confirmed')`,
+      [tourId, req.user.id, v.client_name, v.client_phone, v.birth_date,
+       v.passport_series_number, v.passport_issued_by, v.passport_expires_at,
+       client_photo, passport_scan, v.comment]
     );
 
     req.flash('success', `Заявка на «${tourResult.rows[0].title}» оформлена.`);
     res.redirect('/manager');
   } catch (err) {
+    removeUploadedFiles(req);
     next(err);
   }
 });

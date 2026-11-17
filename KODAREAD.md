@@ -2,7 +2,7 @@
 
 > **Назначение:** Моя рабочая памятка. В новом чате достаточно написать «прочитай KODAREAD.md» — и я знаю структуру проекта, историю исправлений и что осталось на будущее.
 >
-> **Статус (2026-11-17, этап 1 из 5):** Базовая ревизия закоммичена командой (`57bd0c5 fix`), затем поверх неё выполнены **мои правки этапа 1** (см. §0): хранилище `uploads/` + Docker-volume, 6 новых колонок в `bookings` (с миграцией), модуль `utils/validators.js`, валидация телефона/email на регистрации и в бронированиях, seed на 14 туров / 6 юзеров / 5 заявок. Проверено финальным интеграционным прогоном **52/52**. Плюс починены падения каталога (`ReferenceError`) и удалён мёртвый код (`services/tourService.js`, `tmp_test.js`).
+> **Статус (2026-11-17, этап 1 из 5):** Базовая ревизия закоммичена командой (`57bd0c5 fix`), затем поверх неё выполнены **мои правки этапа 1** (см. §0): хранилище `uploads/` + Docker-volume, 6 новых колонок в `bookings` (с миграцией), модуль `utils/validators.js`, валидация телефона/email на регистрации и в бронированиях, seed на 14 туров / 6 юзеров / 5 заявок. Проверено финальным интеграционным прогоном **52/52**. Плюс починены падения каталога (`ReferenceError`) и удалён мёртвый код (`services/tourService.js`, `tmp_test.js`). **Этап 3 выполнен:** multer, полная анкета туриста + валидация, мини-превью файлов, `enctype="multipart/form-data"` с CSRF через query.
 >
 > **HEAD на момент записи:** `027c79b` (merge PR #24). Мои правки этапа 1 — в рабочем дереве, не закоммичены (git-мутации без явной команды не делаю).
 
@@ -437,4 +437,112 @@ app.engine('ejs', (filePath, options, callback) => {
 - В seed нет значений `client_photo`/`passport_scan`, поэтому на демо-данных видны заглушки с инициалами и плашка «Скан паспорта не прикреплён».
 - CRM-поля добавлены в `bookings`, но `DATA_CONTRACT.md` их пока не описывает — контракт стоит обновить на следующем этапе.
 - Страница `/clients` показывает все заявки (включая отменённые) — это осознанно для CRM; при необходимости фильтр по статусу добавляется одной строкой.
+
+---
+
+## 10. Этап 3 из 5 — Загрузка фото/сканов документов (Multer) и полные паспортные данные при бронировании (2026-11-17)
+
+**Задача:** реализовать загрузку фото туриста и скана паспорта через multer, добавить полную анкету с паспортными данными в обе формы бронирования (клиентскую и менеджерскую) с серверной валидацией всех полей, и мини-превью файлов на клиенте.
+
+### 10.1 Новая зависимость
+
+| Пакет | Версия | Назначение |
+|---|---|---|
+| `multer` | ^2.5.0 | Приём multipart/form-data файлов (diskStorage) |
+
+### 10.2 Новый файл: `middlewares/upload.js`
+
+Единственная точка приёма файлов. Экспортирует:
+
+| Экспорт | Что делает |
+|---|---|
+| `uploadBookingDocs` | Готовый middleware для маршрутов бронирования: `multer.fields([{client_photo, maxCount:1}, {passport_scan, maxCount:1}])`, обёрнутый в обработку ошибок (flash + redirect) |
+| `removeUploadedFiles(req)` | Удаляет все файлы, сохранённые в текущем запросе (для case: валидация не прошла) |
+| `getUploadedFileName(req, field)` | Возвращает имя файла или `null` |
+
+**Конфигурация storage (diskStorage):**
+
+| Поле | Куда пишется | Имя файла |
+|---|---|---|
+| `client_photo` | `uploads/photos/` | `Date.now()-Math.round(random*1e9).jpg` |
+| `passport_scan` | `uploads/passports/` | аналогично |
+
+- Расширение берётся **только** из MIME-типа (`.jpg` / `.png` / `.webp`), а не из `originalname`.
+- `fileFilter`: разрешает `image/jpeg`, `image/png`, `image/webp`; при другом MIME — ошибка с понятным текстом.
+- `limits: { fileSize: 5 * 1024 * 1024 }` — 5 МБ на файл.
+- **Ни одна ошибка загрузки не даёт 500**: все переводятся в `req.flash('error', ...)` + редирект обратно.
+
+### 10.3 Обновление `utils/validators.js`
+
+Добавлена функция `validateBookingData(raw, options)`:
+- Принимает `req.body` + опции `{ defaultName, defaultPhone }` (для клиентской брони подставляет из профиля).
+- Валидирует: `client_name` (непустой), `client_phone` (11 цифр), `birth_date` (дата в прошлом), `passport_series_number` (10 цифр), `passport_issued_by` (непустая строка), `passport_expires_at` (непросроченная дата).
+- Возвращает `{ ok: true, values: {...} }` или `{ ok: false, errors: [...] }`.
+
+### 10.4 Обновление маршрутов бронирования
+
+#### `routes/tours.js` — POST /tours/:id/book
+
+- **middleware:** `requireAuth → uploadBookingDocs → хендлер`
+- Извлекает все 7 полей из `req.body` + 2 имени файлов из `req.files`.
+- Валидация через `validateBookingData(req.body, { defaultName: req.user.full_name, defaultPhone: req.user.phone })`.
+- При ошибке валидации: `removeUploadedFiles(req)` → `flash('error', ...)` → `redirect(/tours/${id})`.
+- INSERT содержит: `tour_id, user_id, client_name, client_phone, birth_date, passport_series_number, passport_issued_by, passport_expires_at, client_photo, passport_scan, comment, status='new'`.
+
+#### `server.js` — POST /manager/book
+
+- **middleware:** `requireAuth → requireRole('admin','manager') → uploadBookingDocs → хендлер`
+- Аналогичная валидация без дефолтов (менеджер заполняет все поля).
+- При ошибке валидации: `removeUploadedFiles(req)` → `flash('error', ...)` → `redirect('/manager')`.
+- INSERT содержит: `tour_id, user_id=NULL, manager_id, client_name, client_phone, birth_date, passport_series_number, passport_issued_by, passport_expires_at, client_photo, passport_scan, comment, status='confirmed'`.
+
+### 10.5 Обновление шаблонов (формы)
+
+#### `views/tour.ejs`
+
+- `enctype="multipart/form-data"` добавлен.
+- `action="/tours/<%= tour.id %>/book?_csrf=<%= csrfToken %>"` — CSRF в query (обязательно при multipart, т.к. `req.body` парсится только после multer).
+- Поля: `client_name` (prefill `user.full_name`), `client_phone` (prefill `user.phone`), `birth_date`, `passport_series_number` (placeholder `4510 123456`), `passport_issued_by`, `passport_expires_at`, `client_photo` (type=file, accept), `passport_scan` (type=file, accept), `comment`.
+- Контейнеры превью: `<div id="preview_client_photo">`, `<div id="preview_passport_scan">`.
+
+#### `views/manager.ejs`
+
+- `enctype="multipart/form-data"` добавлен.
+- `action="/manager/book?_csrf=<%= csrfToken %>"`.
+- Те же поля в боковой панели (id с префиксом `bp-`).
+- Контейнеры: `<div id="bp-preview_client_photo">`, `<div id="bp-preview_passport_scan">`.
+
+### 10.6 Клиентский JS: мини-превью файлов
+
+**`public/js/main.js`** — блок 13 `filePreviews()`:
+- Вешает `change` на `input[type="file"][name="client_photo"]` и `[name="passport_scan"]`.
+- Проверяет MIME (jpeg/png/webp) и размер (≤ 5 МБ) на клиенте.
+- Читает через `FileReader.readAsDataURL` → вставляет `<img class="file-preview__thumb">` + подпись.
+- При ошибке показывает `.file-preview__error` и очищает input.
+
+### 10.7 CSS для превью
+
+**`public/css/style.css`** — раздел 28:
+- `.file-preview__thumb` — max 180×140, border-radius, box-shadow.
+- `.file-preview__info` — имя файла + размер, мелкий серый текст.
+- `.file-preview__error` — красный текст ошибки.
+
+### 10.8 CSRF и multipart (важно на будущее)
+
+При `enctype="multipart/form-data"` браузер отправляет тело как multipart. Стандартный `express.urlencoded` **не парсит** такое тело, и на момент `csrf()` `req.body` пуст. Решение: токен передаётся в query-строке `action="?_csrf=..."`, а `middlewares/csrf.js` уже читает `req.query._csrf` как fallback. Hidden-поле `_csrf` оставлено на случай, если кто-то уберёт multipart.
+
+### 10.9 Проверка
+
+- `node --check` — server.js, routes/tours.js, middlewares/upload.js, utils/validators.js, public/js/main.js: **OK**.
+- Сервер запускается: `require('./server.js')` → «Сервер запущен» без ошибок.
+- EJS-шаблоны tour.ejs и manager.ejs не содержат синтаксических ошибок.
+- `package.json` обновлён (multer ^2.5.0 добавлен в dependencies).
+
+### 10.10 Ограничения этапа (не баги)
+
+- В dev через Docker файлы пишутся в volume `uploads_data`, а не в рабочую копию (см. §6).
+- Файлы удаляются при ошибке валидации, но при ошибке БД (INSERT упал) могут остаться осиротевшими — полная компенсация требует транзакции + cleanup.
+- Мини-превью работает только для картинок; PDF не поддерживается (по ТЗ — только изображения).
+- В `validateBookingData` `comment` — необязательное, остальные 6 полей строги.
+- `passport_series_number`: форма допускает пробел (`"4510 123456"`) для удобства, но сервер через `validatePassport` оставляет 10 цифр без пробела.
 

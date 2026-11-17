@@ -149,10 +149,71 @@ function validatePassportExpiry(dateStr) {
   return dateStr;
 }
 
+// ─── 6. validateBookingData — анкета туриста при бронировании (Этап 3) ──────
+// Вызывается в обоих роутах бронирования: клиент (tours.js) и менеджер (server.js).
+// Принимает «сырой» req.body и необязательные опции по умолчанию.
+// Возвращает { ok: true, values: {...} } или { ok: false, errors: ['...'] }.
+//
+// Примеры:
+//   validateBookingData(req.body)                    → ошибки: все поля обязательны
+//   validateBookingData(req.body, { defaultName: 'Олег' }) → defaultName используется как fallback
+
+function validateBookingData(raw, options) {
+  const opts = options || {};
+  const errors = [];
+  const source = raw && typeof raw === 'object' ? raw : {};
+
+  // client_name: если не передано — используем defaultName (из профиля)
+  const client_name = String(source.client_name || opts.defaultName || '').trim().slice(0, 150);
+  if (!client_name) errors.push('Заполните ФИО туриста.');
+
+  // client_phone: строго 11 цифр
+  const rawPhone = String(source.client_phone || opts.defaultPhone || '');
+  const client_phone = validatePhone(rawPhone);
+  if (!client_phone) errors.push('Телефон должен содержать ровно 11 цифр (например: 79001234567).');
+
+  // birth_date: дата в прошлом, возраст 0–120 лет
+  const birth_date = validateBirthDate(String(source.birth_date || '').trim());
+  if (!birth_date) errors.push('Укажите корректную дату рождения (ГГГГ-ММ-ДД).');
+
+  // passport_series_number: ровно 10 цифр
+  const passport_series_number = validatePassport(String(source.passport_series_number || ''));
+  if (!passport_series_number) errors.push('Серия и номер паспорта — ровно 10 цифр (например: 4510123456).');
+
+  // passport_issued_by: непустая строка
+  const passport_issued_by = String(source.passport_issued_by || '').trim().slice(0, 255);
+  if (!passport_issued_by) errors.push('Заполните поле «Кем выдан паспорт».');
+
+  // passport_expires_at: дата >= сегодня
+  const passport_expires_at = validatePassportExpiry(String(source.passport_expires_at || '').trim());
+  if (!passport_expires_at) errors.push('Укажите корректную дату окончания срока действия паспорта (ГГГГ-ММ-ДД).');
+
+  // comment: необязательное, до 1000 символов
+  const comment = String(source.comment || '').trim().slice(0, 1000);
+
+  if (errors.length) {
+    return { ok: false, errors };
+  }
+
+  return {
+    ok: true,
+    values: {
+      client_name,
+      client_phone,
+      birth_date,
+      passport_series_number,
+      passport_issued_by,
+      passport_expires_at,
+      comment: comment || null,
+    },
+  };
+}
+
 module.exports = {
   validateEmail,
   validatePhone,
   validatePassport,
   validateBirthDate,
   validatePassportExpiry,
+  validateBookingData,
 };

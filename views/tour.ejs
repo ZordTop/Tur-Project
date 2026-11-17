@@ -296,9 +296,57 @@
           </div>
         </dl>
 
-        <form method="POST" action="<%= bookAction %>" class="form auth-card__form" style="max-width:none;">
-          <% // CSRF-токен (middlewares/csrf.js); id тура бэкенд берёт из URL (/tours/:id/book) %>
-          <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+        <form method="POST" action="/tours/<%= tour.id %>/book?_csrf=<%= csrfToken %>" enctype="multipart/form-data" class="form auth-card__form" style="max-width:none;">
+          <% // CSRF-токен в query (form enctype="multipart/form-data" блокирует req.body — csrf читает из query) %>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+          <h3 style="margin: 0 0 12px;">Анкета туриста</h3>
+
+          <div class="form__group">
+            <label class="form__label" for="client_name">ФИО туриста <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="text" id="client_name" name="client_name" value="<%= user.full_name || '' %>" placeholder="Иванов Иван Иванович" autocomplete="name" maxlength="150" required>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="client_phone">Телефон <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="tel" id="client_phone" name="client_phone" value="<%= user.phone || '' %>" placeholder="79001234567" inputmode="tel" maxlength="11" pattern="[0-9]{11}" required>
+            <span class="form__hint">Ровно 11 цифр, без пробелов и скобок</span>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="birth_date">Дата рождения <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="date" id="birth_date" name="birth_date" required>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="passport_series_number">Серия и номер паспорта <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="text" id="passport_series_number" name="passport_series_number" placeholder="4510 123456" maxlength="11" pattern="[0-9]{10}" required>
+            <span class="form__hint">Ровно 10 цифр (4 цифры серии + 6 цифр номера)</span>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="passport_issued_by">Кем выдан паспорт <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="text" id="passport_issued_by" name="passport_issued_by" placeholder="Отделом УФМС г. Москвы по району…" maxlength="255" required>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="passport_expires_at">Срок действия паспорта <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="date" id="passport_expires_at" name="passport_expires_at" required>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="client_photo">Фотография туриста</label>
+            <input class="form__input" type="file" id="client_photo" name="client_photo" accept="image/jpeg,image/png,image/webp">
+            <span class="form__hint">JPG, PNG или WEBP, до 5 МБ. Мини-превью появится сразу после выбора.</span>
+            <div id="preview_client_photo" class="file-preview" style="margin-top:8px;"></div>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="passport_scan">Ксерокс / скан паспорта</label>
+            <input class="form__input" type="file" id="passport_scan" name="passport_scan" accept="image/jpeg,image/png,image/webp">
+            <span class="form__hint">JPG, PNG или WEBP, до 5 МБ.</span>
+            <div id="preview_passport_scan" class="file-preview" style="margin-top:8px;"></div>
+          </div>
 
           <div class="form__group">
             <label class="form__label" for="comment">Комментарий к заявке</label>
