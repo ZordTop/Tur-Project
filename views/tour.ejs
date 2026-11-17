@@ -43,7 +43,11 @@
   }
 
   var imgSrc = imgPath(tour.image);
-  var bookAction = '/tours/' + (tour.id != null ? tour.id : (typeof id !== 'undefined' ? id : '')) + '/book';
+  // CSRF-токен дублируем в action: форма отправляется как multipart/form-data
+  // (файлы), скрытое поле _csrf тоже остаётся.
+  var formCsrf = (typeof csrfToken !== 'undefined' && csrfToken) ? csrfToken : '';
+  var bookAction = '/tours/' + (tour.id != null ? tour.id : (typeof id !== 'undefined' ? id : '')) + '/book?_csrf=' + encodeURIComponent(formCsrf);
+  var todayIso = new Date().toISOString().slice(0, 10);
 %>
 
 <section class="section">
@@ -296,9 +300,65 @@
           </div>
         </dl>
 
-        <form method="POST" action="<%= bookAction %>" class="form auth-card__form" style="max-width:none;">
+        <form method="POST" action="<%= bookAction %>" enctype="multipart/form-data" class="form auth-card__form" style="max-width:none;">
           <% // CSRF-токен (middlewares/csrf.js); id тура бэкенд берёт из URL (/tours/:id/book) %>
           <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+
+          <!-- ── Анкета туриста: все поля проверяются и на клиенте, и на сервере ── -->
+          <div class="form__group">
+            <label class="form__label" for="client_name">ФИО туриста <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="text" id="client_name" name="client_name"
+                   value="<%= user.full_name || '' %>" autocomplete="name" maxlength="150" required>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="client_phone">Телефон <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="tel" id="client_phone" name="client_phone"
+                   value="<%= user.phone || '' %>" autocomplete="tel" inputmode="tel" maxlength="30"
+                   placeholder="+7 (900) 000-00-00" required>
+            <span class="form__hint">11 цифр, например +7 (900) 000-00-00</span>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="birth_date">Дата рождения <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="date" id="birth_date" name="birth_date"
+                   max="<%= todayIso %>" required>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="passport_series_number">Серия и номер паспорта <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="text" id="passport_series_number" name="passport_series_number"
+                   placeholder="4510 123456" maxlength="20" required>
+            <span class="form__hint">10 цифр: 4 цифры серии + 6 цифр номера</span>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="passport_issued_by">Кем выдан паспорт <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="text" id="passport_issued_by" name="passport_issued_by"
+                   placeholder="ОВД района, код подразделения" maxlength="255" required>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="passport_expires_at">Срок действия паспорта <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="date" id="passport_expires_at" name="passport_expires_at"
+                   min="<%= todayIso %>" required>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="client_photo">Фото туриста</label>
+            <input class="form__input" type="file" id="client_photo" name="client_photo"
+                   accept="image/jpeg,image/png,image/webp">
+            <span class="form__hint">JPEG, PNG или WebP, не больше 5 МБ</span>
+            <div id="clientPhotoPreview"></div>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="passport_scan">Скан паспорта</label>
+            <input class="form__input" type="file" id="passport_scan" name="passport_scan"
+                   accept="image/jpeg,image/png,image/webp">
+            <span class="form__hint">JPEG, PNG или WebP, не больше 5 МБ</span>
+            <div id="passportScanPreview"></div>
+          </div>
 
           <div class="form__group">
             <label class="form__label" for="comment">Комментарий к заявке</label>

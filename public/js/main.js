@@ -561,4 +561,63 @@ document.addEventListener('DOMContentLoaded', () => {
     // Первичный расчёт при загрузке (на случай если поля уже заполнены сервером)
     updateTotal();
   })();
+
+  // ── 14. Мини-превью выбранных файлов (фото туриста, скан паспорта) ──
+  // HTML: <input type="file" name="client_photo"> + <div id="clientPhotoPreview"></div>
+  // Файл ещё не отправлен — показываем локальную копию через URL.createObjectURL
+  // и освобождаем её при повторном выборе или сбросе формы.
+  const FILE_PREVIEWS = [
+    { input: 'client_photo', preview: 'clientPhotoPreview', alt: 'Фото туриста' },
+    { input: 'passport_scan', preview: 'passportScanPreview', alt: 'Скан паспорта' },
+  ];
+
+  FILE_PREVIEWS.forEach(({ input, preview, alt }) => {
+    const field = document.querySelector('input[type="file"][name="' + input + '"]');
+    const container = document.getElementById(preview);
+    if (!field || !container) return;
+
+    let objectUrl = null;
+
+    const clearPreview = () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
+      }
+      container.innerHTML = '';
+    };
+
+    field.addEventListener('change', () => {
+      clearPreview();
+
+      const file = field.files && field.files[0];
+      if (!file) return;
+
+      // accept в разметке — только подсказка браузеру, поэтому проверяем сами.
+      if (!file.type || !file.type.startsWith('image/')) {
+        container.textContent = 'Можно выбрать только изображение.';
+        return;
+      }
+
+      objectUrl = URL.createObjectURL(file);
+
+      const img = document.createElement('img');
+      img.src = objectUrl;
+      img.alt = alt;
+      img.style.cssText = 'display:block;max-width:140px;max-height:140px;margin-top:8px;'
+        + 'border-radius:8px;border:1px solid #ddd;object-fit:cover;';
+
+      const caption = document.createElement('span');
+      caption.className = 'form__hint';
+      caption.textContent = file.name;
+      caption.style.display = 'block';
+      caption.style.marginTop = '4px';
+
+      container.appendChild(img);
+      container.appendChild(caption);
+    });
+
+    // Сброс формы (form.reset()) — превью больше не актуально.
+    const form = field.closest('form');
+    if (form) form.addEventListener('reset', clearPreview);
+  });
 });

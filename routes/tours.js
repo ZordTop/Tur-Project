@@ -9,8 +9,15 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middlewares/auth');
 // Единая обработка фильтров для каталога и панели менеджера (см. utils/tourFilters.js)
 const { parseFilters, buildConditions } = require('../utils/tourFilters');
-// Нормализация телефона (см. utils/validators.js)
-const { validatePhone } = require('../utils/validators');
+// Единые валидаторы анкеты туриста (см. utils/validators.js)
+const {
+  validatePhone,
+  validatePassport,
+  validateBirthDate,
+  validatePassportExpiry,
+} = require('../utils/validators');
+// Приём фото туриста и скана паспорта (multer, см. middlewares/upload.js)
+const { uploadBookingDocs, removeUploadedFiles } = require('../middlewares/upload');
 
 const router = express.Router();
 
@@ -147,12 +154,16 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST /tours/:id/book — самостоятельная заявка авторизованного клиента.
-// Форма страницы тура отправляет только комментарий; id тура берётся из URL,
-// данные клиента — из профиля (req.user), роль менеджера не заполняется.
-router.post('/:id/book', requireAuth, async (req, res, next) => {
+// Форма страницы тура (multipart/form-data) отправляет анкету туриста, файлы
+// client_photo / passport_scan и комментарий; id тура берётся из URL.
+// uploadBookingDocs идёт после requireAuth: гостя не пускаем ещё до записи
+// файлов на диск.
+router.post('/:id/book', requireAuth, uploadBookingDocs, async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
+      // Файлы могли успеть сохраниться до проверки id — убираем их.
+      await removeUploadedFiles(req);
       return next();
     }
 
@@ -163,21 +174,78 @@ router.post('/:id/book', requireAuth, async (req, res, next) => {
     );
     const tour = tourResult.rows[0];
     if (!tour) {
+      await removeUploadedFiles(req);
       return next();
     }
 
+    // ── Анкета туриста (все поля обязательные, кроме комментария и файлов) ──
     const comment =
       typeof req.body.comment === 'string' ? req.body.comment.trim().slice(0, 1000) : '';
 
-    // Телефон из профиля может быть в старом формате (пробелы, +7).
-    // Нормализуем здесь, чтобы в bookings всегда попадал канонический формат.
-    const rawPhone = String(req.user.phone || '');
-    const client_phone = validatePhone(rawPhone) || rawPhone.slice(0, 30);
+    // client_name: если поле пустое — подставляем ФИО из профиля.
+    const client_name =
+      String(req.body.client_name || '').trim().slice(0, 150) ||
+      String(req.user.full_name || '').trim().slice(0, 150);
+
+    const client_phone = validatePhone(String(req.body.client_phone || ''));
+    const birth_date = validateBirthDate(String(req.body.birth_date || ''));
+    const passport_series_number = validatePassport(
+      String(req.body.passport_series_number || '')
+    );
+    const passport_issued_by = String(req.body.passport_issued_by || '')
+      .trim()
+      .slice(0, 255);
+    const passport_expires_at = validatePassportExpiry(
+      String(req.body.passport_expires_at || '')
+    );
+
+    const errors = [];
+    if (!client_name) errors.push('Укажите ФИО туриста.');
+    if (!client_phone) errors.push('Телефон должен содержать ровно 11 цифр.');
+    if (!birth_date) errors.push('Укажите корректную дату рождения (не в будущем).');
+    if (!passport_series_number) {
+      errors.push('Серия и номер паспорта — ровно 10 цифр.');
+    }
+    if (!passport_issued_by) errors.push('Укажите, кем выдан паспорт.');
+    if (!passport_expires_at) {
+      errors.push('Укажите корректный срок действия паспорта (не просрочен).');
+    }
+
+    if (errors.length > 0) {
+      // Загруженные в этом запросе файлы не должны оставаться на диске.
+      await removeUploadedFiles(req);
+      req.flash('error', errors.join(' '));
+      return res.redirect(`/tours/${id}`);
+    }
+
+    // В БД пишем только имена файлов (DATA_CONTRACT.md, блок 4).
+    const client_photo = req.files && req.files.client_photo
+      ? req.files.client_photo[0].filename
+      : null;
+    const passport_scan = req.files && req.files.passport_scan
+      ? req.files.passport_scan[0].filename
+      : null;
 
     await pool.query(
-      `INSERT INTO bookings (tour_id, user_id, client_name, client_phone, comment, status)
-       VALUES ($1, $2, $3, $4, $5, 'new')`,
-      [id, req.user.id, req.user.full_name, client_phone, comment || null]
+      `INSERT INTO bookings (
+         tour_id, user_id, client_name, client_phone, comment, status,
+         birth_date, passport_series_number, passport_issued_by,
+         passport_expires_at, client_photo, passport_scan
+       )
+       VALUES ($1, $2, $3, $4, $5, 'new', $6, $7, $8, $9, $10, $11)`,
+      [
+        id,
+        req.user.id,
+        client_name,
+        client_phone,
+        comment || null,
+        birth_date,
+        passport_series_number,
+        passport_issued_by,
+        passport_expires_at,
+        client_photo,
+        passport_scan,
+      ]
     );
 
     req.flash('success', `Заявка на тур «${tour.title}» создана. Менеджер свяжется с вами для подтверждения.`);

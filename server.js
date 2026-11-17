@@ -13,7 +13,14 @@ const csrf = require('./middlewares/csrf');
 const flash = require('./middlewares/flash');
 const pool = require('./db/pool');
 const { parseFilters, buildConditions } = require('./utils/tourFilters');
-const { validatePhone } = require('./utils/validators');
+const {
+  validatePhone,
+  validatePassport,
+  validateBirthDate,
+  validatePassportExpiry,
+} = require('./utils/validators');
+// Приём фото туриста и скана паспорта (multer, см. middlewares/upload.js)
+const { uploadBookingDocs, removeUploadedFiles } = require('./middlewares/upload');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -156,22 +163,45 @@ app.get('/manager', requireAuth, requireRole('admin', 'manager'), async (req, re
 });
 
 // POST /manager/book — заявка, оформленная менеджером.
-// Форма в manager.ejs отправляет tour_id, client_name, client_phone, comment.
-app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), async (req, res, next) => {
+// Форма в manager.ejs (multipart/form-data) отправляет tour_id, анкету туриста,
+// файлы client_photo / passport_scan и комментарий. uploadBookingDocs идёт
+// после проверки роли: посторонний не сможет записать файлы на диск.
+app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), uploadBookingDocs, async (req, res, next) => {
   try {
     const tourId = Number(req.body.tour_id);
-    const client_name = String(req.body.client_name || '').trim().slice(0, 150);
     const comment = String(req.body.comment || '').trim().slice(0, 1000);
 
-    // Телефон нормализуем через общий валидатор: в базу должны попадать только
-    // цифры (по контракту — 11 цифр). Если менеджер ввел иностранный или
-    // нестандартный номер, валидатор вернёт null — тогда сохраняем строку как
-    // есть, не блокируя оформление: заявка важнее формата телефона.
-    const rawPhone = String(req.body.client_phone || '').trim();
-    const client_phone = validatePhone(rawPhone) || rawPhone.slice(0, 30);
+    // ── Анкета туриста: те же строгие правила, что и при брони клиентом ──
+    const client_name = String(req.body.client_name || '').trim().slice(0, 150);
+    const client_phone = validatePhone(String(req.body.client_phone || ''));
+    const birth_date = validateBirthDate(String(req.body.birth_date || ''));
+    const passport_series_number = validatePassport(
+      String(req.body.passport_series_number || '')
+    );
+    const passport_issued_by = String(req.body.passport_issued_by || '')
+      .trim()
+      .slice(0, 255);
+    const passport_expires_at = validatePassportExpiry(
+      String(req.body.passport_expires_at || '')
+    );
 
-    if (!client_name || !client_phone) {
-      req.flash('error', 'Заполните ФИО и телефон клиента.');
+    const errors = [];
+    if (!Number.isInteger(tourId) || tourId <= 0) errors.push('Выберите тур.');
+    if (!client_name) errors.push('Укажите ФИО клиента.');
+    if (!client_phone) errors.push('Телефон должен содержать ровно 11 цифр.');
+    if (!birth_date) errors.push('Укажите корректную дату рождения (не в будущем).');
+    if (!passport_series_number) {
+      errors.push('Серия и номер паспорта — ровно 10 цифр.');
+    }
+    if (!passport_issued_by) errors.push('Укажите, кем выдан паспорт.');
+    if (!passport_expires_at) {
+      errors.push('Укажите корректный срок действия паспорта (не просрочен).');
+    }
+
+    if (errors.length > 0) {
+      // Файлы уже могли сохраниться на диск — удаляем перед редиректом.
+      await removeUploadedFiles(req);
+      req.flash('error', errors.join(' '));
       return res.redirect('/manager');
     }
 
@@ -181,14 +211,39 @@ app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), async (r
       [tourId]
     );
     if (!tourResult.rows[0]) {
+      await removeUploadedFiles(req);
       req.flash('error', 'Выбранный тур не найден.');
       return res.redirect('/manager');
     }
 
+    // В БД пишем только имена файлов (DATA_CONTRACT.md, блок 4).
+    const client_photo = req.files && req.files.client_photo
+      ? req.files.client_photo[0].filename
+      : null;
+    const passport_scan = req.files && req.files.passport_scan
+      ? req.files.passport_scan[0].filename
+      : null;
+
     await pool.query(
-      `INSERT INTO bookings (tour_id, user_id, manager_id, client_name, client_phone, comment, status)
-       VALUES ($1, NULL, $2, $3, $4, $5, 'new')`,
-      [tourId, req.user.id, client_name, client_phone, comment || null]
+      `INSERT INTO bookings (
+         tour_id, user_id, manager_id, client_name, client_phone, comment, status,
+         birth_date, passport_series_number, passport_issued_by,
+         passport_expires_at, client_photo, passport_scan
+       )
+       VALUES ($1, NULL, $2, $3, $4, $5, 'confirmed', $6, $7, $8, $9, $10, $11)`,
+      [
+        tourId,
+        req.user.id,
+        client_name,
+        client_phone,
+        comment || null,
+        birth_date,
+        passport_series_number,
+        passport_issued_by,
+        passport_expires_at,
+        client_photo,
+        passport_scan,
+      ]
     );
 
     req.flash('success', `Заявка на «${tourResult.rows[0].title}» оформлена.`);

@@ -1,14 +1,1 @@
-<%- include('partials/header') %>
-
-<section class="section">
-  <div class="container">
-    <p class="error__code"><%= typeof status !== 'undefined' ? status : 500 %></p>
-    <h1 class="page-title">Что-то пошло не так</h1>
-    <p class="page-subtitle">
-      <%= typeof message !== 'undefined' && message ? message : 'Внутренняя ошибка сервера.' %>
-    </p>
-    <a class="btn btn--primary" href="/">На главную</a>
-  </div>
-</section>
-
-<%- include('partials/footer') %>
+app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), uploadBookingDocs, async (req, res, next) => {j

@@ -6,6 +6,10 @@
   var _tours = (typeof tours !== 'undefined' && tours) ? tours : [];
   var _recent = (typeof recentBookings !== 'undefined' && recentBookings) ? recentBookings : [];
   var f = (typeof filters !== 'undefined' && filters) ? filters : {};
+  // CSRF-токен дублируем в action формы оформления (multipart/form-data).
+  var formCsrf = (typeof csrfToken !== 'undefined' && csrfToken) ? csrfToken : '';
+  // Границы для <input type="date">: рождение — в прошлом, паспорт — не просрочен.
+  var todayIso = new Date().toISOString().slice(0, 10);
 
   // Чтение значения фильтра из нескольких возможных имён ключей
   var val = function () {
@@ -295,7 +299,7 @@
 
   <div class="sidebar__body">
     <!-- tour_id — обязательное поле по DATA_CONTRACT.md (bookings.tour_id, FK → tours.id) -->
-    <form method="POST" action="/manager/book" class="form bp-form">
+    <form method="POST" action="/manager/book?_csrf=<%= encodeURIComponent(formCsrf) %>" enctype="multipart/form-data" class="form bp-form">
       <% // CSRF-токен (middlewares/csrf.js) — без него POST /manager/book отклоняется с 403 %>
       <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
       <input type="hidden" name="tour_id" value="">
@@ -329,7 +333,42 @@
       <div class="form__group">
         <label class="form__label" for="bp-client_phone">Телефон клиента <span style="color:var(--clr-danger);">*</span></label>
         <input class="form__input" type="tel" id="bp-client_phone" name="client_phone" placeholder="+7-900-000-00-00" autocomplete="off" inputmode="tel" maxlength="30" required>
-        <span class="bp-hint">формат произвольный, максимум 30 символов</span>
+        <span class="bp-hint">11 цифр, например +7 (900) 000-00-00</span>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-birth_date">Дата рождения <span style="color:var(--clr-danger);">*</span></label>
+        <input class="form__input" type="date" id="bp-birth_date" name="birth_date" max="<%= todayIso %>" required>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-passport_series_number">Серия и номер паспорта <span style="color:var(--clr-danger);">*</span></label>
+        <input class="form__input" type="text" id="bp-passport_series_number" name="passport_series_number" placeholder="4510 123456" maxlength="20" autocomplete="off" required>
+        <span class="bp-hint">10 цифр: 4 цифры серии + 6 цифр номера</span>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-passport_issued_by">Кем выдан паспорт <span style="color:var(--clr-danger);">*</span></label>
+        <input class="form__input" type="text" id="bp-passport_issued_by" name="passport_issued_by" placeholder="ОВД района, код подразделения" maxlength="255" autocomplete="off" required>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-passport_expires_at">Срок действия паспорта <span style="color:var(--clr-danger);">*</span></label>
+        <input class="form__input" type="date" id="bp-passport_expires_at" name="passport_expires_at" min="<%= todayIso %>" required>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-client_photo">Фото туриста</label>
+        <input class="form__input" type="file" id="bp-client_photo" name="client_photo" accept="image/jpeg,image/png,image/webp">
+        <span class="bp-hint">JPEG, PNG или WebP, не больше 5 МБ</span>
+        <div id="clientPhotoPreview"></div>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-passport_scan">Скан паспорта</label>
+        <input class="form__input" type="file" id="bp-passport_scan" name="passport_scan" accept="image/jpeg,image/png,image/webp">
+        <span class="bp-hint">JPEG, PNG или WebP, не больше 5 МБ</span>
+        <div id="passportScanPreview"></div>
       </div>
 
       <div class="form__group">
