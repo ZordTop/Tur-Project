@@ -28,6 +28,7 @@ router.get('/', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT b.id, b.tour_id, b.status, b.comment, b.created_at,
+              b.client_name, b.client_phone,
               t.title AS tour_title, t.destination_country, t.destination_city,
               t.departure_at, t.total_price, t.is_active AS tour_is_active
        FROM bookings b

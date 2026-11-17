@@ -107,8 +107,34 @@ const initSQL = `
     -- Три состояния заявки. CHECK закрывает путь к опечатке вроде 'done'
     status        VARCHAR(20) NOT NULL DEFAULT 'new'
                 CHECK (status IN ('new', 'confirmed', 'cancelled')),
-    created_at    TIMESTAMP NOT NULL DEFAULT now()
+    created_at    TIMESTAMP NOT NULL DEFAULT now(),
+    -- ─── Данные для оформления тура (этап 1) ───
+    -- Все шесть колонок необязательные: заявка создаётся сразу, а паспортные
+    -- данные и файлы клиент досылает позже. Тип DATE у дат — PostgreSQL сам
+    -- не примет '2027-02-31' или 'abc'.
+    birth_date        DATE,                          -- дата рождения туриста
+    passport_series_number VARCHAR(20),              -- серия и номер, 10 цифр
+    passport_issued_by   VARCHAR(255),               -- кем выдан паспорт
+    passport_expires_at  DATE,                       -- срок действия паспорта
+    -- В колонках хранится только ПУТЬ к файлу (/uploads/...), сам файл лежит
+    -- на диске в папке uploads/ — база не должна быть хранилищем бинарников.
+    client_photo      VARCHAR(255),                  -- фото туриста
+    passport_scan     VARCHAR(255)                   -- скан/фото паспорта
   );
+
+  -- ─── Миграция для уже существующей базы ───
+  -- CREATE TABLE IF NOT EXISTS обновляет схему только на чистой базе.
+  -- Если таблицы созданы раньше (до расширения контракта), эта ветка
+  -- добавит недостающие колонки. ADD COLUMN IF NOT EXISTS идемпотентна:
+  -- повторный запуск ничего не меняет и НЕ удаляет существующие данные,
+  -- поэтому db/init.js по-прежнему можно запускать повторно.
+  ALTER TABLE bookings ADD COLUMN IF NOT EXISTS birth_date           DATE;
+  ALTER TABLE bookings ADD COLUMN IF NOT EXISTS passport_series_number VARCHAR(20);
+  ALTER TABLE bookings ADD COLUMN IF NOT EXISTS passport_issued_by   VARCHAR(255);
+  ALTER TABLE bookings ADD COLUMN IF NOT EXISTS passport_expires_at  DATE;
+  ALTER TABLE bookings ADD COLUMN IF NOT EXISTS client_photo         VARCHAR(255);
+  ALTER TABLE bookings ADD COLUMN IF NOT EXISTS passport_scan        VARCHAR(255);
+
 
   -- ─── Индексы: почему поиск становится быстрее ───
   -- Без индекса база перечитывает ВСЕ строки таблицы подряд, пока найдёт

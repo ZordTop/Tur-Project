@@ -27,4 +27,14 @@ Thumbs.db
 tmp/
 temp/
 
+# Загруженные пользователями файлы (фото, сканы паспортов) — не в git.
+# Структура папок сохраняется через .gitkeep, содержимое игнорируется.
+uploads/*
+!uploads/photos/
+!uploads/passports/
+uploads/photos/*
+!uploads/photos/.gitkeep
+uploads/passports/*
+!uploads/passports/.gitkeep
+
 

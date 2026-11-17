@@ -1,11 +1,13 @@
 // Маршруты авторизации: форма входа/регистрации, обработчики POST, выход.
 // Поля и названия таблиц строго из DATA_CONTRACT.md (users, tours, bookings).
 // После входа редирект по ролям: admin → /admin, manager → /manager, user → /tours.
+// Валидация email/телефона делегирована в utils/validators.js.
 
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const pool = require('../db/pool');
 const { dropSession } = require('../middlewares/auth');
+const { validateEmail, validatePhone } = require('../utils/validators');
 
 const router = express.Router();
 
@@ -16,22 +18,8 @@ function homeFor(role) {
   return '/tours';
 }
 
-// Простая проверка формата email: «символы@символы.символы» без пробелов.
-// Полноту проверяет только письмо с подтверждением, но от явного мусора
-// («неemail», «a@b», «@b.com») это защищает и на регистрации, и на входе.
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// Телефон: цифры, «+», пробелы, скобки и дефисы; от 7 до 30 символов.
-// Формат произвольный (+7 900 000-00-00, 89001234567 и т.п.), как обещает
-// подсказка в форме менеджера, но «абвгд» в поле телефона не пройдёт.
-const PHONE_RE = /^\+?[\d\s()-]{6,29}$/;
-
-// Нормализация email: обрезка пробелов и нижний регистр. Иначе на одной
-// почте можно завести два аккаунта («A@B.com» и «a@b.com»), а UNIQUE их
-// не остановит — проверка идёт по строке как есть.
-function normalizeEmail(raw) {
-  return typeof raw === 'string' ? raw.trim().toLowerCase() : '';
-}
+// Простая проверка формата email и нормализация делегированы в utils/validators.js.
+// Здесь остаются только ролевые редиректы, безопасный next и формы для рендера.
 
 // Куда хотел попасть гость, прежде чем requireAuth отправил его на /login?next=...
 // Берём только внутренние пути: '/' и '//host' (протокол-опускающий редирект) отсекаем,
@@ -80,27 +68,23 @@ router.post('/register', async (req, res, next) => {
       return res.redirect(homeFor(res.locals.currentUser.role));
     }
 
-    const email = normalizeEmail(req.body.email);
-    const { password, full_name, phone } = req.body;
+    // Валидация делегирована в utils/validators.js (email + телефон).
+    // Это гарантирует единую логику на всём бэкенде: регистрация,
+    // бронирование, создание туров — все используют одни и те же правила.
+    const { password, full_name } = req.body;
+    const email = validateEmail(req.body.email);
+    const phone = validatePhone(req.body.phone);
     const full_name_clean = typeof full_name === 'string' ? full_name.trim() : '';
-    const phone_clean = typeof phone === 'string' ? phone.trim() : '';
 
-    if (!email || !password || !full_name_clean || !phone_clean) {
+    if (!email || !password || !full_name_clean || !phone) {
+      const errors = [];
+      if (!email) errors.push('email');
+      if (!password) errors.push('пароль');
+      if (!full_name_clean) errors.push('имя');
+      if (!phone) errors.push('телефон');
       return res
         .status(400)
-        .render('register', registerRenderData(req, 'Заполните все поля: email, пароль, имя, телефон'));
-    }
-
-    if (!EMAIL_RE.test(email)) {
-      return res
-        .status(400)
-        .render('register', registerRenderData(req, 'Проверьте формат email: ожидается вид name@example.com'));
-    }
-
-    if (!PHONE_RE.test(phone_clean)) {
-      return res
-        .status(400)
-        .render('register', registerRenderData(req, 'Телефон может содержать цифры, +, пробелы, скобки и дефисы (7–30 символов)'));
+        .render('register', registerRenderData(req, `Заполните все поля: ${errors.join(', ')}`));
     }
 
     if (password.length < 8) {
@@ -116,7 +100,7 @@ router.post('/register', async (req, res, next) => {
       `INSERT INTO users (email, password_hash, full_name, phone, role)
        VALUES ($1, $2, $3, $4, 'user')
        RETURNING id, email, full_name, phone, role`,
-      [email, password_hash, full_name_clean, phone_clean]
+      [email, password_hash, full_name_clean, phone]
     );
 
     const user = result.rows[0];
@@ -152,7 +136,9 @@ router.get('/login', (req, res) => {
 // POST /auth/login — проверка email/password_hash и is_blocked
 router.post('/login', async (req, res, next) => {
   try {
-    const email = normalizeEmail(req.body.email);
+    // Тот же валидатор, что и на регистрации: email нормализуется к нижнему
+    // регистру и обрезается, поэтому 'Admin@Turist.RU' находит аккаунт.
+    const email = validateEmail(req.body.email);
     const { password } = req.body;
 
     if (!email || !password) {
