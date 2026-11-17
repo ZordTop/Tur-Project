@@ -3384,3 +3384,151 @@ body.role-admin .header .burger span { background: #e2e8f0; }
     justify-content: center;
   }
 }
+
+/* ===== 27. Конструктор туров (админ-панель) ===== */
+
+.tour-builder {
+  margin-bottom: 24px;
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  background: var(--clr-surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.tour-builder__toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 20px;
+  background: #f8fafc;
+  border: none;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--clr-primary);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.tour-builder__toggle:hover {
+  background: var(--clr-primary-light);
+}
+
+.tour-builder__toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--clr-primary);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tour-builder__body {
+  padding: 24px;
+  border-top: 1px solid var(--clr-border);
+}
+
+/* ─── Форма конструктора ─── */
+.tour-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tour-form__title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--clr-text);
+}
+
+.tour-form__block {
+  margin: 0;
+  padding: 18px;
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  background: var(--clr-bg);
+}
+
+.tour-form__legend {
+  padding: 0 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--clr-muted);
+}
+
+.tour-form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.tour-form__group--full {
+  grid-column: 1 / -1;
+}
+
+/* ─── Блок итоговой стоимости ─── */
+.tour-form__total {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  margin-top: 14px;
+  background: var(--clr-primary-light);
+  border: 2px solid var(--clr-primary);
+  border-radius: var(--radius);
+}
+
+.tour-form__total-label {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--clr-text);
+}
+
+.tour-form__total-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--clr-primary);
+  font-family: var(--font-mono);
+}
+
+.tour-form__total-currency {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--clr-primary);
+}
+
+/* ─── Кнопки формы ─── */
+.tour-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+/* ─── Адаптив ─── */
+@media (max-width: 768px) {
+  .tour-form__grid {
+    grid-template-columns: 1fr;
+  }
+  .tour-builder__body {
+    padding: 16px;
+  }
+  .tour-form__block {
+    padding: 14px;
+  }
+  .tour-form__total {
+    flex-wrap: wrap;
+  }
+  .tour-form__total-value {
+    font-size: 1.3rem;
+  }
+}

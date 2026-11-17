@@ -32,6 +32,171 @@
         Туры
         <span class="admin-section__count"><%= _tours.length %></span>
       </h2>
+
+      <!-- Конструктор туров: сворачиваемый блок -->
+      <div class="tour-builder" id="tour-builder">
+        <button type="button" class="tour-builder__toggle" id="tour-builder-toggle">
+          <span class="tour-builder__toggle-icon">＋</span>
+          Конструктор туров
+        </button>
+
+        <div class="tour-builder__body" id="tour-builder-body" style="display:none;">
+          <form method="post" action="/admin/tours/create" id="tour-form" class="tour-form">
+            <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+            <h3 class="tour-form__title" id="tour-form-title">Создание нового тура</h3>
+
+            <!-- Блок 1. Основное -->
+            <fieldset class="tour-form__block">
+              <legend class="tour-form__legend">Основное</legend>
+              <div class="tour-form__grid">
+                <div class="form__group tour-form__group--full">
+                  <label class="form__label" for="tb-title">Название тура</label>
+                  <input class="form__input" type="text" id="tb-title" name="title" placeholder="Солнечный Сочи: отдых у моря" required>
+                </div>
+                <div class="form__group tour-form__group--full">
+                  <label class="form__label" for="tb-desc">Описание программы</label>
+                  <textarea class="form__input" id="tb-desc" name="description" rows="3" placeholder="Подробное описание тура..." required></textarea>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-image">Путь к картинке</label>
+                  <input class="form__input" type="text" id="tb-image" name="image" list="tb-images-list" placeholder="/images/tour-sochi.jpg">
+                  <datalist id="tb-images-list">
+                    <option value="/images/tour-sochi.jpg">
+                    <option value="/images/tour-spb.jpg">
+                    <option value="/images/tour-prague.jpg">
+                    <option value="/images/tour-istanbul.jpg">
+                    <option value="/images/tour-antalya.jpg">
+                    <option value="/images/luchshie_oteli_Karelii.jpg">
+                    <option value="/images/1.webp">
+                    <option value="/images/2.jpg">
+                    <option value="/images/4.jpg">
+                    <option value="/images/5.jpg">
+                    <option value="/images/6.webp">
+                    <option value="/images/7.webp">
+                    <option value="/images/8.jpg">
+                    <option value="/images/9.jpg">
+                  </datalist>
+                  <small class="form__hint">Если пусто — будет использована картинка по умолчанию</small>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-rating">Рейтинг (1.0–5.0)</label>
+                  <input class="form__input" type="number" id="tb-rating" name="rating" min="1" max="5" step="0.1" placeholder="4.5">
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-nights">Кол-во ночей</label>
+                  <input class="form__input" type="number" id="tb-nights" name="nights" min="1" placeholder="7" required>
+                </div>
+              </div>
+            </fieldset>
+
+            <!-- Блок 2. Перелёт -->
+            <fieldset class="tour-form__block">
+              <legend class="tour-form__legend">Перелёт</legend>
+              <div class="tour-form__grid">
+                <div class="form__group">
+                  <label class="form__label" for="tb-departure-city">Город вылета</label>
+                  <input class="form__input" type="text" id="tb-departure-city" name="departure_city" placeholder="Москва" required>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-dest-country">Страна прилёта</label>
+                  <input class="form__input" type="text" id="tb-dest-country" name="destination_country" placeholder="Турция" required>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-dest-city">Город / курорт</label>
+                  <input class="form__input" type="text" id="tb-dest-city" name="destination_city" placeholder="Анталья" required>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-departure-at">Дата вылета</label>
+                  <input class="form__input" type="datetime-local" id="tb-departure-at" name="departure_at" required>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-arrival-at">Дата прилёта</label>
+                  <input class="form__input" type="datetime-local" id="tb-arrival-at" name="arrival_at" required>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-flight-duration">Время в пути</label>
+                  <input class="form__input" type="text" id="tb-flight-duration" name="flight_duration" placeholder="3ч 20мин" required>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-flight-class">Класс полёта</label>
+                  <select class="form__input form__select" id="tb-flight-class" name="flight_class" required>
+                    <option value="economy">Эконом</option>
+                    <option value="comfort">Комфорт</option>
+                    <option value="business">Бизнес</option>
+                  </select>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-flight-price">Цена перелёта, ₽</label>
+                  <input class="form__input" type="number" id="tb-flight-price" name="flight_price" min="0" step="1" placeholder="25000" required>
+                </div>
+              </div>
+            </fieldset>
+
+            <!-- Блок 3. Отель -->
+            <fieldset class="tour-form__block">
+              <legend class="tour-form__legend">Отель</legend>
+              <div class="tour-form__grid">
+                <div class="form__group">
+                  <label class="form__label" for="tb-hotel-name">Название отеля</label>
+                  <input class="form__input" type="text" id="tb-hotel-name" name="hotel_name" placeholder="Rixos Premium" required>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-hotel-stars">Звёздность</label>
+                  <select class="form__input form__select" id="tb-hotel-stars" name="hotel_stars" required>
+                    <option value="2">2 ★★</option>
+                    <option value="3">3 ★★★</option>
+                    <option value="4">4 ★★★★</option>
+                    <option value="5">5 ★★★★★</option>
+                  </select>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-hotel-meal">Тип питания</label>
+                  <select class="form__input form__select" id="tb-hotel-meal" name="hotel_meal" required>
+                    <option value="RO">RO — Без питания</option>
+                    <option value="BB">BB — Завтраки</option>
+                    <option value="HB">HB — Полупансион</option>
+                    <option value="AI">AI — Всё включено</option>
+                  </select>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-hotel-price">Цена отеля, ₽</label>
+                  <input class="form__input" type="number" id="tb-hotel-price" name="hotel_price" min="0" step="1" placeholder="45000" required>
+                </div>
+              </div>
+            </fieldset>
+
+            <!-- Блок 4. Трансфер и Итог -->
+            <fieldset class="tour-form__block">
+              <legend class="tour-form__legend">Трансфер и Итог</legend>
+              <div class="tour-form__grid">
+                <div class="form__group">
+                  <label class="form__label" for="tb-transfer-type">Тип трансфера</label>
+                  <select class="form__input form__select" id="tb-transfer-type" name="transfer_type" required>
+                    <option value="bus">Общий автобус</option>
+                    <option value="private">Личный автомобиль</option>
+                  </select>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-transfer-price">Цена трансфера, ₽</label>
+                  <input class="form__input" type="number" id="tb-transfer-price" name="transfer_price" min="0" step="1" placeholder="3000" required>
+                </div>
+              </div>
+              <div class="tour-form__total">
+                <span class="tour-form__total-label">Итоговая стоимость тура:</span>
+                <span class="tour-form__total-value" id="tour-total-preview">0</span>
+                <span class="tour-form__total-currency">₽</span>
+              </div>
+            </fieldset>
+
+            <!-- Кнопки -->
+            <div class="tour-form__actions">
+              <button class="btn btn--primary" type="submit" id="tour-form-submit">Создать тур</button>
+              <button class="btn btn--secondary" type="button" id="tour-form-cancel-edit" style="display:none;">Отмена редактирования</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <div class="table-wrap">
         <table class="admin-table">
           <thead>
@@ -69,10 +234,37 @@
               </td>
               <td class="num"><%= price(t.total_price) %> ₽</td>
               <td>
-                <form method="post" action="/admin/tours/<%= t.id %>/active" style="display:inline;">
-                  <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-                  <button class="btn btn--sm btn--secondary" type="submit"><%= t.is_active ? 'Скрыть' : 'Показать' %></button>
-                </form>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <button class="btn btn--sm btn--accent" type="button"
+                    data-edit-tour
+                    data-tour='<%- JSON.stringify({
+                      id: t.id,
+                      title: t.title,
+                      description: t.description,
+                      image: t.image,
+                      rating: t.rating,
+                      nights: t.nights,
+                      departure_city: t.departure_city,
+                      destination_country: t.destination_country,
+                      destination_city: t.destination_city,
+                      departure_at: t.departure_at,
+                      arrival_at: t.arrival_at,
+                      flight_duration: t.flight_duration,
+                      flight_class: t.flight_class,
+                      flight_price: t.flight_price,
+                      hotel_name: t.hotel_name,
+                      hotel_stars: t.hotel_stars,
+                      hotel_meal: t.hotel_meal,
+                      hotel_price: t.hotel_price,
+                      transfer_type: t.transfer_type,
+                      transfer_price: t.transfer_price
+                    }) %>'
+                  >Редактировать</button>
+                  <form method="post" action="/admin/tours/<%= t.id %>/active" style="display:inline;">
+                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                    <button class="btn btn--sm btn--secondary" type="submit"><%= t.is_active ? 'Скрыть' : 'Показать' %></button>
+                  </form>
+                </div>
               </td>
             </tr>
             <% }); %>

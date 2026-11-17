@@ -8,6 +8,80 @@
 
 ---
 
+## 0. Этап 5 из 5 — Конструктор туров в панели администратора (2026-11-17)
+
+**Задача:** создание и редактирование туров прямо из админ-панели с авторасчётом итоговой цены и валидацией всех полей.
+
+### 0.1 Бэкенд: маршруты (`server.js`)
+
+Добавлены два новых POST-маршрута в блоке `requireRole('admin')`:
+
+| Маршрут | Что делает |
+|---|---|
+| `POST /admin/tours/create` | Валидация → `INSERT INTO tours ... RETURNING id` (is_active=TRUE) → flash + redirect `/admin` |
+| `POST /admin/tours/:id/edit` | Валидация → `UPDATE tours SET ... WHERE id=$1` (пересчёт total_price) → flash + redirect `/admin` |
+
+**Функция `validateTourData(req)`** (внутри `server.js`):
+
+- Обязательные текстовые поля: `title`, `description`, `departure_city`, `destination_country`, `destination_city`, `flight_duration`, `hotel_name`.
+- `image`: если пустое → `/images/tour-sochi.jpg` (дефолт).
+- `rating`: пустое → `null`, иначе число 1.0–5.0 (округление до 0.1).
+- `nights`: целое ≥ 1.
+- `departure_at` / `arrival_at`: корректные даты, `arrival_at > departure_at`.
+- Enum-поля строго: `flight_class ∈ [economy, comfort, business]`, `hotel_stars ∈ [2,3,4,5]`, `hotel_meal ∈ [RO, BB, HB, AI]`, `transfer_type ∈ [bus, private]`.
+- Цены: `flight_price`, `hotel_price`, `transfer_price` — целые ≥ 0.
+- **Принудительный расчёт:** `total_price = flight_price + hotel_price + transfer_price` (никогда не доверяем клиенту).
+- Ошибки объединяются в массив, передаются в `req.flash('error', errors.join(' '))`.
+
+### 0.2 Фронтенд: форма конструктора (`views/admin.ejs`)
+
+Во вкладке «Туры» добавлен сворачиваемый блок `tour-builder`:
+
+- Кнопка-заголовок «Конструктор туров» с иконкой `＋`/`−` для сворачивания.
+- Форма с 4 логическими блоками (fieldset):
+  - **Основное:** название, описание, картинка (datalist с подсказками из `public/images/`), рейтинг, ночей.
+  - **Перелёт:** город вылета, страна, город прилёта, datetime-local для дат, время в пути, класс полёта, цена.
+  - **Отель:** название, звёздность (select), питание (select), цена.
+  - **Трансфер и Итог:** тип трансфера, цена + крупный индикатор «Итоговая стоимость: **NNN NNN ₽**».
+- CSRF-токен встроен.
+- В таблице туров добавлена кнопка **«Режим редактирования»** (`data-edit-tour`) рядом с «Скрыть/Показать». Данные тура передаются через `data-tour='<%- JSON.stringify(...) %>'` (безопасное экранирование).
+
+### 0.3 Клиентский JS (`public/js/main.js`)
+
+Блок 13: `tourBuilder()` — IIFE:
+
+- **Калькулятор цены:** `input` на полях `flight_price`, `hotel_price`, `transfer_price` → мгновенный пересчёт `#tour-total-preview` с форматированием `toLocaleString('ru-RU')` (пробелы как `85 400`).
+- **Режим редактирования:** клик на кнопку «Редактировать» → заполнение всех полей формы, смена заголовка на «Редактирование тура #ID», смена `form.action` на `/admin/tours/<id>/edit`, показ кнопки «Отмена редактирования», плавная прокрутка к форме.
+- **Отмена редактирования:** `form.reset()`, возврат `action` на `/admin/tours/create`, скрытие кнопки отмены.
+- Конвертация дат ISO → `datetime-local` формат (`YYYY-MM-DDTHH:mm`).
+
+### 0.4 Стили (`public/css/style.css`)
+
+Раздел 27: стили для конструктора:
+
+- `.tour-builder` — обёртка с toggle-кнопкой.
+- `.tour-form__block` — fieldset-стилизация (фон `var(--clr-bg)`, скруглённые углы).
+- `.tour-form__grid` — CSS Grid `auto-fit, minmax(200px, 1fr)` — 2–3 колонки.
+- `.tour-form__total` — выделенный блок итоговой цены (синий фон, моноширинный шрифт для чисел).
+- Адаптив ≤ 768px: одноколоночная сетка, уменьшенные отступы.
+
+### 0.5 Попутный фикс (этап 5)
+
+| Файл | Проблема | Решение |
+|---|---|---|
+| `routes/tours.js:13` | Остался `require('../services/tourService')` после удаления модуля (DEAD-03) — сервер падает при старте | Удалён мёртвый импорт |
+| `routes/tours.js:175` | `validatePhone()` вызывается, но не импортирована в этом файле — 500 при бронировании | Добавлен `const { validatePhone } = require('../utils/validators')` |
+
+### 0.6 Проверка
+
+- `node --check` → server.js, public/js/main.js: OK.
+- EJS: `admin.ejs` компилируется и рендерится (через `ejs.compile`).
+- CSS: синтаксис без ошибок.
+- CSRF-защита сохранена (`<input type="hidden" name="_csrf">` в форме конструктора).
+- Стиль админ-панели сохранён: те же CSS-переменные, бейджи, кнопки, отступы.
+
+---
+
 ## 0. Этап 1 из 5 — что сделано в этом заходе
 
 ### 0.1 Хранилище файлов и Docker
@@ -248,6 +322,7 @@ urlencoded/json → static → trust proxy → session → flash → csrf → at
 - **README.md частично устарел** — в структуре упоминает удалённый `data/`, в стеке нет PostgreSQL, нет шагов init/seed и переменных DATABASE_URL/SESSION_SECRET. KODAREAD.md и PROJECT_ANALYSIS.md актуальны (обновлены 2026-11-17 после этапа 1).
 - **`restoreFiltersFromUrl` в main.js** теперь избыточен (бэкенд всегда отдаёт `filters`), но безвреден — оставлен как fallback.
 - В tours.ejs функция `val()` принимает старые алиасы (`country`, `city`, `hotelStars`, `max_price`) — harmless legacy, можно почистить.
+- **Конструктор туров реализован:** создание и редактирование туров прямо в админ-панели (`/admin`) с авторасчётом цены, валидацией всех полей и live-калькулятором.
 - **Загрузка файлов ещё не реализована:** папки, volume и колонки `client_photo`/`passport_scan` готовы, но маршрутов приёма файлов (multer и т.п.) и полей `enctype="multipart/form-data"` пока нет — это следующий этап. Зависимостей не добавляли.
 - **`uploads/` в dev не виден на хосте:** в `docker-compose.dev.yml` том монтируется поверх bind-mount, поэтому файлы лежат в volume, а не в рабочей копии. Посмотреть: `docker compose exec app ls uploads/photos`.
 - **Телефон реального аккаунта** (`zubairzord@gmail.com`, `8 989 497-09-94`) остался в старом формате — реальные данные не переписывал. Его новые заявки уже сохраняются нормализованными.
@@ -293,6 +368,8 @@ Dev: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`
 | GET /manager | admin+manager | каталог с фильтрами + 20 своих заявок |
 | POST /manager/book | admin+manager | заявка от менеджера |
 | GET /admin | admin | все туры/заявки/юзеры |
+| POST /admin/tours/create | admin | Создание нового тура (конструктор) |
+| POST /admin/tours/:id/edit | admin | Редактирование существующего тура |
 | POST /admin/tours/:id/active | admin | toggle is_active |
 | POST /admin/bookings/:id/status | admin | new/confirmed/cancelled (иное → отклонено) |
 | POST /admin/users/:id/role | admin | user/manager/admin; нельзя снять роль с себя |

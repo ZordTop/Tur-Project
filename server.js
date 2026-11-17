@@ -226,6 +226,212 @@ app.get('/admin', requireAuth, requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// ─── Конструктор туров (Этап 5) ────────────────────────────────────────────────
+// Валидация и подготовка данных тура (общая функция для create/edit).
+// Возвращает { ok: true, data: {...} } или { ok: false, errors: [...] }.
+
+function validateTourData(req) {
+  const errors = [];
+
+  // Обязательные текстовые поля
+  const requiredText = [
+    'title', 'description', 'departure_city',
+    'destination_country', 'destination_city',
+    'flight_duration', 'hotel_name'
+  ];
+  for (const field of requiredText) {
+    const val = String(req.body[field] || '').trim();
+    if (!val) errors.push(`Заполните поле «${field}».`);
+  }
+
+  // image: если передано и не пустое — используем, иначе дефолт
+  let image = String(req.body.image || '').trim();
+  if (!image) {
+    image = '/images/tour-sochi.jpg';
+  }
+
+  // rating: null если пустое, иначе число 1.0–5.0
+  let rating = null;
+  if ((req.body.rating || '').trim() !== '') {
+    const r = Number(req.body.rating);
+    if (!Number.isFinite(r) || r < 1.0 || r > 5.0) {
+      errors.push('Рейтинг должен быть числом от 1.0 до 5.0.');
+    } else {
+      rating = Math.round(r * 10) / 10; // округляем до 0.1
+    }
+  }
+
+  // nights: целое >= 1
+  const nights = Number(req.body.nights);
+  if (!Number.isInteger(nights) || nights < 1) {
+    errors.push('Количество ночей — целое число ≥ 1.');
+  }
+
+  // departure_at / arrival_at: корректные даты, arrival > departure
+  const departureAt = new Date(req.body.departure_at);
+  const arrivalAt   = new Date(req.body.arrival_at);
+  if (isNaN(departureAt.getTime())) {
+    errors.push('Укажите корректную дату и время вылета.');
+  }
+  if (isNaN(arrivalAt.getTime())) {
+    errors.push('Укажите корректную дату и время прилёта.');
+  }
+  if (!isNaN(departureAt.getTime()) && !isNaN(arrivalAt.getTime()) && arrivalAt <= departureAt) {
+    errors.push('Время прилёта должно быть позже времени вылета.');
+  }
+
+  // Enum-поля — строго по списку
+  const flightClass = String(req.body.flight_class || '').trim();
+  if (!['economy', 'comfort', 'business'].includes(flightClass)) {
+    errors.push('Класс полёта должен быть economy, comfort или business.');
+  }
+
+  const hotelStars = Number(req.body.hotel_stars);
+  if (![2, 3, 4, 5].includes(hotelStars)) {
+    errors.push('Звёздность отеля: 2, 3, 4 или 5.');
+  }
+
+  const hotelMeal = String(req.body.hotel_meal || '').trim();
+  if (!['RO', 'BB', 'HB', 'AI'].includes(hotelMeal)) {
+    errors.push('Тип питания: RO, BB, HB или AI.');
+  }
+
+  const transferType = String(req.body.transfer_type || '').trim();
+  if (!['bus', 'private'].includes(transferType)) {
+    errors.push('Тип трансфера: bus или private.');
+  }
+
+  // Цены: целые неотрицательные
+  const flightPrice  = Number(req.body.flight_price);
+  const hotelPrice   = Number(req.body.hotel_price);
+  const transferPrice = Number(req.body.transfer_price);
+  if (!Number.isInteger(flightPrice) || flightPrice < 0) {
+    errors.push('Цена перелёта — целое неотрицательное число.');
+  }
+  if (!Number.isInteger(hotelPrice) || hotelPrice < 0) {
+    errors.push('Цена отеля — целое неотрицательное число.');
+  }
+  if (!Number.isInteger(transferPrice) || transferPrice < 0) {
+    errors.push('Цена трансфера — целое неотрицательное число.');
+  }
+
+  if (errors.length > 0) {
+    return { ok: false, errors };
+  }
+
+  // Принудительный серверный расчёт total_price (никогда не доверяем клиенту)
+  const totalPrice = flightPrice + hotelPrice + transferPrice;
+
+  return {
+    ok: true,
+    data: {
+      title: String(req.body.title).trim(),
+      description: String(req.body.description).trim(),
+      image,
+      rating,
+      nights,
+      departure_city: String(req.body.departure_city).trim(),
+      destination_country: String(req.body.destination_country).trim(),
+      destination_city: String(req.body.destination_city).trim(),
+      departure_at,
+      arrival_at,
+      flight_duration: String(req.body.flight_duration).trim(),
+      flight_class: flightClass,
+      flight_price: flightPrice,
+      hotel_name: String(req.body.hotel_name).trim(),
+      hotel_stars: hotelStars,
+      hotel_meal: hotelMeal,
+      hotel_price: hotelPrice,
+      transfer_type: transferType,
+      transfer_price: transferPrice,
+      total_price: totalPrice,
+    },
+  };
+}
+
+// Создание тура: POST /admin/tours/create
+app.post('/admin/tours/create', requireAuth, requireRole('admin'), async (req, res, next) => {
+  try {
+    const validation = validateTourData(req);
+    if (!validation.ok) {
+      req.flash('error', validation.errors.join(' '));
+      return res.redirect('/admin');
+    }
+
+    const d = validation.data;
+    await pool.query(
+      `INSERT INTO tours (
+        title, description, image, rating, nights,
+        departure_city, destination_country, destination_city,
+        departure_at, arrival_at, flight_duration, flight_class, flight_price,
+        hotel_name, hotel_stars, hotel_meal, hotel_price,
+        transfer_type, transfer_price, total_price, is_active
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+      [
+        d.title, d.description, d.image, d.rating, d.nights,
+        d.departure_city, d.destination_country, d.destination_city,
+        d.departure_at, d.arrival_at, d.flight_duration, d.flight_class, d.flight_price,
+        d.hotel_name, d.hotel_stars, d.hotel_meal, d.hotel_price,
+        d.transfer_type, d.transfer_price, d.total_price,
+        true, // is_active
+      ]
+    );
+
+    req.flash('success', 'Новый тур успешно создан и добавлен в каталог');
+    res.redirect('/admin');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Редактирование тура: POST /admin/tours/:id/edit
+app.post('/admin/tours/:id/edit', requireAuth, requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      req.flash('error', 'Недопустимый ID тура.');
+      return res.redirect('/admin');
+    }
+
+    // Проверяем существование тура
+    const existing = await pool.query('SELECT id FROM tours WHERE id = $1', [id]);
+    if (!existing.rows[0]) {
+      req.flash('error', 'Тур не найден.');
+      return res.redirect('/admin');
+    }
+
+    const validation = validateTourData(req);
+    if (!validation.ok) {
+      req.flash('error', validation.errors.join(' '));
+      return res.redirect('/admin');
+    }
+
+    const d = validation.data;
+    await pool.query(
+      `UPDATE tours SET
+        title = $1, description = $2, image = $3, rating = $4, nights = $5,
+        departure_city = $6, destination_country = $7, destination_city = $8,
+        departure_at = $9, arrival_at = $10, flight_duration = $11, flight_class = $12, flight_price = $13,
+        hotel_name = $14, hotel_stars = $15, hotel_meal = $16, hotel_price = $17,
+        transfer_type = $18, transfer_price = $19, total_price = $20
+      WHERE id = $21`,
+      [
+        d.title, d.description, d.image, d.rating, d.nights,
+        d.departure_city, d.destination_country, d.destination_city,
+        d.departure_at, d.arrival_at, d.flight_duration, d.flight_class, d.flight_price,
+        d.hotel_name, d.hotel_stars, d.hotel_meal, d.hotel_price,
+        d.transfer_type, d.transfer_price, d.total_price,
+        id,
+      ]
+    );
+
+    req.flash('success', 'Изменения в туре сохранены');
+    res.redirect('/admin');
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── CRUD-действия админа (GAP-01) ───────────────────────────────────────────
 // Все четыре маршрута закрыты requireRole('admin'); каждое действие делает
 // UPDATE по числовому id из URL и значения из фиксированного списка, поэтому
