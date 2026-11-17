@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fcd34d"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e3a5f"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="300" fill="url(#sky)"/>
+  <path d="M50 250 Q100 150 150 200 Q200 120 250 180 Q300 100 350 160 Q400 80 450 150 Q500 100 550 170 Q600 130 650 200 Q700 140 750 220 L750 300 Z" fill="#78350f"/>
+  <rect y="300" width="800" height="200" fill="url(#water)"/>
+  <path d="M100 310 Q200 330 300 310 T500 310 T700 310 V500 H100 Z" fill="#1e40af" opacity="0.4"/>
+  <text x="40" y="440" font-family="Arial, sans-serif" font-size="44" font-weight="bold" fill="#f0f9ff">Стамбул · Босфор</text>
+</svg>

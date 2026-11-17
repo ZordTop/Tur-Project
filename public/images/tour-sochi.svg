@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0369a1"/>
+      <stop offset="1" stop-color="#082f49"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="330" fill="url(#sky)"/>
+  <circle cx="650" cy="90" r="52" fill="#fde047"/>
+  <path d="M0 300 L180 170 L320 300 Z" fill="#64748b"/>
+  <path d="M150 300 L300 140 L470 300 Z" fill="#475569"/>
+  <path d="M270 190 L300 140 L332 190 Z" fill="#f8fafc"/>
+  <rect y="330" width="800" height="170" fill="url(#sea)"/>
+  <path d="M0 340 Q100 355 200 340 T400 340 T600 340 T800 340 V500 H0 Z" fill="#0ea5e9" opacity="0.5"/>
+  <text x="40" y="450" font-family="Arial, sans-serif" font-size="44" font-weight="bold" fill="#f0f9ff">Сочи · Чёрное море</text>
+</svg>

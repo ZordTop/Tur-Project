@@ -56,7 +56,14 @@
         <!-- Страна прилёта -->
         <div class="filters__group">
           <label class="form__label" for="f-destination_country">Страна прилёта</label>
-          <input class="form__input" type="text" id="f-destination_country" name="destination_country" value="<%= val('destination_country','country') %>" placeholder="Россия">
+          <input class="form__input" type="text" id="f-destination_country" name="destination_country" value="<%= val('destination_country') %>" placeholder="Россия" list="countries-list">
+          <% // Бэкенд отдаёт DISTINCT стран — подсказки при вводе (фильтр ILIKE,
+             // поэтому можно ввести и часть названия). %>
+          <datalist id="countries-list">
+            <% (typeof countries !== 'undefined' && countries ? countries : []).forEach(function (c) { %>
+              <option value="<%= c %>"></option>
+            <% }); %>
+          </datalist>
         </div>
 
         <!-- Город прилёта -->

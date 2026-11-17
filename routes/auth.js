@@ -16,6 +16,23 @@ function homeFor(role) {
   return '/tours';
 }
 
+// Простая проверка формата email: «символы@символы.символы» без пробелов.
+// Полноту проверяет только письмо с подтверждением, но от явного мусора
+// («неemail», «a@b», «@b.com») это защищает и на регистрации, и на входе.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Телефон: цифры, «+», пробелы, скобки и дефисы; от 7 до 30 символов.
+// Формат произвольный (+7 900 000-00-00, 89001234567 и т.п.), как обещает
+// подсказка в форме менеджера, но «абвгд» в поле телефона не пройдёт.
+const PHONE_RE = /^\+?[\d\s()-]{6,29}$/;
+
+// Нормализация email: обрезка пробелов и нижний регистр. Иначе на одной
+// почте можно завести два аккаунта («A@B.com» и «a@b.com»), а UNIQUE их
+// не остановит — проверка идёт по строке как есть.
+function normalizeEmail(raw) {
+  return typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+}
+
 // Куда хотел попасть гость, прежде чем requireAuth отправил его на /login?next=...
 // Берём только внутренние пути: '/' и '//host' (протокол-опускающий редирект) отсекаем,
 // иначе форма входа превратилась бы в открытую дверь для редиректа на чужой сайт.
@@ -37,12 +54,23 @@ function loginRenderData(req, error) {
   };
 }
 
+// То же для формы регистрации: next поддерживается и здесь, чтобы путь,
+// данный requireAuth, не терялся, если гость решил сначала зарегистрироваться.
+function registerRenderData(req, error) {
+  const raw = (req.body && req.body.next) || req.query.next;
+  return {
+    title: 'Регистрация — Туристический сайт',
+    error,
+    nextUrl: safeNext(raw),
+  };
+}
+
 // GET /auth/register — форма регистрации
 router.get('/register', (req, res) => {
   if (res.locals.currentUser) {
     return res.redirect(homeFor(res.locals.currentUser.role));
   }
-  res.render('register', { title: 'Регистрация — Туристический сайт', error: null });
+  res.render('register', registerRenderData(req, null));
 });
 
 // POST /auth/register — создание нового пользователя (role=user по умолчанию)
@@ -52,24 +80,33 @@ router.post('/register', async (req, res, next) => {
       return res.redirect(homeFor(res.locals.currentUser.role));
     }
 
-    const { email, password, full_name, phone } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const { password, full_name, phone } = req.body;
+    const full_name_clean = typeof full_name === 'string' ? full_name.trim() : '';
+    const phone_clean = typeof phone === 'string' ? phone.trim() : '';
 
-    if (!email || !password || !full_name || !phone) {
+    if (!email || !password || !full_name_clean || !phone_clean) {
       return res
         .status(400)
-        .render('register', {
-          title: 'Регистрация — Туристический сайт',
-          error: 'Заполните все поля: email, пароль, имя, телефон',
-        });
+        .render('register', registerRenderData(req, 'Заполните все поля: email, пароль, имя, телефон'));
+    }
+
+    if (!EMAIL_RE.test(email)) {
+      return res
+        .status(400)
+        .render('register', registerRenderData(req, 'Проверьте формат email: ожидается вид name@example.com'));
+    }
+
+    if (!PHONE_RE.test(phone_clean)) {
+      return res
+        .status(400)
+        .render('register', registerRenderData(req, 'Телефон может содержать цифры, +, пробелы, скобки и дефисы (7–30 символов)'));
     }
 
     if (password.length < 8) {
       return res
         .status(400)
-        .render('register', {
-          title: 'Регистрация — Туристический сайт',
-          error: 'Пароль должен быть не короче 8 символов',
-        });
+        .render('register', registerRenderData(req, 'Пароль должен быть не короче 8 символов'));
     }
 
     const password_hash = await bcrypt.hash(password, 10);
@@ -79,21 +116,26 @@ router.post('/register', async (req, res, next) => {
       `INSERT INTO users (email, password_hash, full_name, phone, role)
        VALUES ($1, $2, $3, $4, 'user')
        RETURNING id, email, full_name, phone, role`,
-      [email, password_hash, full_name, phone]
+      [email, password_hash, full_name_clean, phone_clean]
     );
 
     const user = result.rows[0];
     req.session.userId = user.id;
+
+    req.flash('success', `Добро пожаловать, ${user.full_name}! Аккаунт создан.`);
+
+    // Если гость пришёл по защищённой ссылке (next) — ведём его туда.
+    const nextUrl = safeNext(req.body.next || req.query.next);
+    if (nextUrl) {
+      return res.redirect(nextUrl);
+    }
 
     res.redirect(homeFor(user.role));
   } catch (err) {
     if (err.code === '23505') {
       return res
         .status(409)
-        .render('register', {
-          title: 'Регистрация — Туристический сайт',
-          error: 'Пользователь с таким email уже существует',
-        });
+        .render('register', registerRenderData(req, 'Пользователь с таким email уже существует'));
     }
     next(err);
   }
@@ -110,7 +152,8 @@ router.get('/login', (req, res) => {
 // POST /auth/login — проверка email/password_hash и is_blocked
 router.post('/login', async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const { password } = req.body;
 
     if (!email || !password) {
       return res
@@ -149,10 +192,13 @@ router.post('/login', async (req, res, next) => {
     // В сессии хранится только id: данные и статус блокировки всегда актуальны из БД
     req.session.userId = user.id;
 
-    // Если был next (редирект с requireAuth) — ведём туда
-    const redirectTo = req.body.next || req.query.next;
-    if (redirectTo && redirectTo.startsWith('/')) {
-      return res.redirect(redirectTo);
+    // Если был next (редирект с requireAuth) — ведём туда.
+    // safeNext принимает только внутренние пути: скрытое поле формы мог
+    // подменить клиент, а наивная проверка startsWith('/') пропускала
+    // протокол-опускающий редирект вида //evil.com (open redirect).
+    const nextUrl = safeNext(req.body.next || req.query.next);
+    if (nextUrl) {
+      return res.redirect(nextUrl);
     }
 
     res.redirect(homeFor(user.role));

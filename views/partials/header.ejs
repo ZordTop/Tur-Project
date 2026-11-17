@@ -45,6 +45,7 @@
               <span class="user-menu__name"><%= currentUser.full_name %></span>
             </div>
             <form method="post" action="/logout">
+              <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
               <button class="btn btn--sm btn--danger" type="submit">Выйти</button>
             </form>
           </div>
@@ -58,6 +59,7 @@
               <span class="user-menu__name"><%= currentUser.full_name %></span>
             </div>
             <form method="post" action="/logout">
+              <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
               <button class="btn btn--sm btn--danger" type="submit">Выйти</button>
             </form>
           </div>
@@ -72,6 +74,7 @@
               <span class="user-menu__name"><%= currentUser.full_name %></span>
             </div>
             <form method="post" action="/logout">
+              <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
               <button class="btn btn--sm btn--danger" type="submit">Выйти</button>
             </form>
           </div>
@@ -81,3 +84,17 @@
   </header>
 
   <main class="main">
+<%
+  // Одноразовые flash-сообщения (success/error/info) после redirect.
+  // Кладёт их middleware flash.js в res.locals.flash.
+  const _flash = (typeof flash !== 'undefined' && Array.isArray(flash)) ? flash : [];
+%>
+<% if (_flash.length > 0) { %>
+  <div class="container" style="margin-top:20px;">
+    <% _flash.forEach(function (msg) { %>
+      <div class="alert alert--<%= msg.type === 'error' ? 'error' : msg.type === 'success' ? 'success' : 'info' %>" role="<%= msg.type === 'error' ? 'alert' : 'status' %>" style="margin-bottom:12px;">
+        <%= msg.message %>
+      </div>
+    <% }); %>
+  </div>
+<% } %>

@@ -14,3 +14,10 @@ services:
       - .:/app
       - /app/node_modules
     command: npm run dev
+
+  db:
+    # В dev-режиме порт БД доступен с хоста для отладки (DBeaver, pgAdmin).
+    # В production-файле этого проброса нет — см. комментарий в docker-compose.yml.
+    ports:
+      - "${DB_PORT:-5432}:5432"
+

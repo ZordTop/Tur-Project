@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#ea580c"/>
+    </linearGradient>
+    <linearGradient id="sand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#d97706"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="250" fill="url(#sky)"/>
+  <circle cx="400" cy="100" r="60" fill="#fef3c7"/>
+  <path d="M0 250 L800 250 L800 350 L0 350 Z" fill="url(#sand)"/>
+  <path d="M50 250 Q100 230 150 250 Q200 230 250 250 L250 350 L50 350 Z" fill="#b45309"/>
+  <rect x="120" y="180" width="8" height="70" fill="#78350f" rx="3"/>
+  <path d="M115 180 Q124 150 133 180" fill="none" stroke="#16a34a" stroke-width="4"/>
+  <path d="M100 190 Q124 160 148 190" fill="none" stroke="#16a34a" stroke-width="4"/>
+  <rect y="350" width="800" height="150" fill="#0284c7"/>
+  <path d="M0 360 Q100 370 200 360 T400 360 T600 360 T800 360 V500 H0 Z" fill="#0ea5e9" opacity="0.4"/>
+  <text x="40" y="440" font-family="Arial, sans-serif" font-size="44" font-weight="bold" fill="#f0f9ff">Анталья · Турция</text>
+</svg>
