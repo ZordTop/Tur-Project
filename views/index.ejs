@@ -1,36 +1,276 @@
 <%- include('partials/header') %>
 
-<section class="hero">
+<%
+  /* ── Данные витрины из GET / (routes/index.js): tours, filters, countries,
+        totalCount, pageSize. Все обращения защищены проверками, чтобы шаблон
+        не падал, если локаль не передана. ── */
+  const f = (typeof filters !== 'undefined' && filters) ? filters : {};
+  const val = function () {
+    for (let i = 0; i < arguments.length; i++) {
+      const v = f[arguments[i]];
+      if (v !== undefined && v !== null && String(v) !== '') return String(v);
+    }
+    return '';
+  };
+
+  const _tours = (typeof tours !== 'undefined' && tours) ? tours : [];
+  const _countries = (typeof countries !== 'undefined' && countries) ? countries : [];
+  const _total = Number(typeof totalCount !== 'undefined' ? totalCount : _tours.length) || 0;
+  const _pageSize = Number(typeof pageSize !== 'undefined' ? pageSize : 6) || 6;
+
+  // Маппинг ENUM → русский (те же подписи, что в tours.ejs и main.js)
+  const mealMap = { RO: 'Без питания', BB: 'Только завтраки', HB: 'Полупансион', AI: 'Всё включено' };
+  const transferMap = { bus: 'Общий автобус', private: 'Личный автомобиль' };
+
+  // Русское склонение: 1 ночь / 2 ночи / 5 ночей
+  function plural(n, forms) {
+    const abs = Math.abs(n) % 100;
+    const last = abs % 10;
+    if (abs > 10 && abs < 20) return forms[2];
+    if (last > 1 && last < 5) return forms[1];
+    if (last === 1) return forms[0];
+    return forms[2];
+  }
+
+  // Разряды цены: 43000 → '43 000'; null/NaN → '—'
+  function price(v) {
+    if (v == null || v === '') return '—';
+    const n = Number(v);
+    return isNaN(n) ? String(v) : n.toLocaleString('ru-RU');
+  }
+
+  // Контракт хранит /images/..., допускаем и «голое» имя файла
+  function imgPath(img) {
+    if (!img) return null;
+    if (img.charAt(0) === '/' || /^https?:\/\//.test(img)) return img;
+    return '/images/' + img;
+  }
+
+  function stars(n) {
+    return '★'.repeat(Math.max(0, Math.min(5, Number(n) || 0)));
+  }
+%>
+
+<!-- ─── Компактная шапка витрины: фильтр виден сразу при входе ─── -->
+<section class="hero hero--compact">
   <div class="container hero__inner">
     <h1 class="hero__title">Туры, в которых всё уже включено</h1>
     <p class="hero__subtitle">
-      Рейсы, проживание и трансферы — мы собрали всё в одном предложении,
-      чтобы вам осталось только выбрать направление.
+      Перелёт, отель и трансфер — в одной цене. Подберите направление, даты и бюджет.
     </p>
-    <div class="hero__actions">
-      <a class="btn btn--primary" href="/tours">Смотреть туры</a>
-      <a class="btn btn--ghost" href="/about">О нас</a>
-    </div>
   </div>
 </section>
 
-<section class="section">
+<section class="section section--tight">
   <div class="container">
-    <h2 class="section__title">Почему с нами удобно</h2>
-    <div class="features">
-      <article class="feature">
-        <h3 class="feature__title">Перелёт</h3>
-        <p class="feature__text">Подбираем прямые рейсы и указываем время в пути заранее.</p>
-      </article>
-      <article class="feature">
-        <h3 class="feature__title">Проживание</h3>
-        <p class="feature__text">Отели рядом с морем или центром — с завтраками и понятным рейтингом.</p>
-      </article>
-      <article class="feature">
-        <h3 class="feature__title">Трансфер</h3>
-        <p class="feature__text">Встреча в аэропорту и дорога до отеля входят в стоимость тура.</p>
-      </article>
-    </div>
+
+    <!-- ─── Панель фильтров ─── -->
+    <form class="filters filters--home" method="GET" action="/">
+      <div class="filters__head">
+        <h2 class="filters__title">🔍 Подбор тура</h2>
+      </div>
+
+      <div class="filters__grid">
+        <!-- Место: страна прилёта -->
+        <div class="filters__group">
+          <label class="form__label" for="h-destination_country">Страна прилёта</label>
+          <input class="form__input" type="text" id="h-destination_country" name="destination_country"
+                 value="<%= val('destination_country') %>" placeholder="Россия" list="home-countries-list">
+          <datalist id="home-countries-list">
+            <% _countries.forEach(function (c) { %>
+              <option value="<%= c %>"></option>
+            <% }); %>
+          </datalist>
+        </div>
+
+        <!-- Место: город прилёта -->
+        <div class="filters__group">
+          <label class="form__label" for="h-destination_city">Город прилёта</label>
+          <input class="form__input" type="text" id="h-destination_city" name="destination_city"
+                 value="<%= val('destination_city') %>" placeholder="Сочи">
+        </div>
+
+        <!-- Место: город вылета -->
+        <div class="filters__group">
+          <label class="form__label" for="h-departure_city">Город вылета</label>
+          <input class="form__input" type="text" id="h-departure_city" name="departure_city"
+                 value="<%= val('departure_city') %>" placeholder="Москва">
+        </div>
+
+        <!-- Дата вылета -->
+        <div class="filters__group">
+          <label class="form__label" for="h-departure_date">Дата вылета</label>
+          <input class="form__input" type="date" id="h-departure_date" name="departure_date"
+                 value="<%= val('departure_date') %>">
+        </div>
+
+        <!-- Длительность -->
+        <div class="filters__group">
+          <label class="form__label" for="h-nights">Ночей (от)</label>
+          <input class="form__input" type="number" id="h-nights" name="nights"
+                 value="<%= val('nights') %>" min="1" max="60" placeholder="7">
+        </div>
+
+        <!-- Звёздность -->
+        <div class="filters__group">
+          <label class="form__label" for="h-hotel_stars">Звёздность отеля</label>
+          <select class="form__input form__select" id="h-hotel_stars" name="hotel_stars">
+            <option value="">Любая</option>
+            <% for (let s = 2; s <= 5; s++) { %>
+              <option value="<%= s %>" <%= val('hotel_stars') === String(s) ? 'selected' : '' %>><%= s %>★</option>
+            <% } %>
+          </select>
+        </div>
+
+        <!-- Класс полёта -->
+        <div class="filters__group">
+          <label class="form__label" for="h-flight_class">Класс полёта</label>
+          <select class="form__input form__select" id="h-flight_class" name="flight_class">
+            <option value="">Любой</option>
+            <option value="economy"  <%= val('flight_class') === 'economy'  ? 'selected' : '' %>>Эконом</option>
+            <option value="comfort"  <%= val('flight_class') === 'comfort'  ? 'selected' : '' %>>Комфорт</option>
+            <option value="business" <%= val('flight_class') === 'business' ? 'selected' : '' %>>Бизнес</option>
+          </select>
+        </div>
+
+        <!-- Питание -->
+        <div class="filters__group">
+          <label class="form__label" for="h-hotel_meal">Питание</label>
+          <select class="form__input form__select" id="h-hotel_meal" name="hotel_meal">
+            <option value="">Любое</option>
+            <% [['RO', 'Без питания'], ['BB', 'Только завтраки'], ['HB', 'Полупансион'], ['AI', 'Всё включено']]
+                 .forEach(function (m) { %>
+              <option value="<%= m[0] %>" <%= val('hotel_meal') === m[0] ? 'selected' : '' %>><%= m[0] %> — <%= m[1] %></option>
+            <% }); %>
+          </select>
+        </div>
+
+        <!-- Трансфер -->
+        <div class="filters__group">
+          <label class="form__label" for="h-transfer_type">Трансфер</label>
+          <select class="form__input form__select" id="h-transfer_type" name="transfer_type">
+            <option value="">Любой</option>
+            <option value="bus"     <%= val('transfer_type') === 'bus'     ? 'selected' : '' %>>Общий автобус</option>
+            <option value="private" <%= val('transfer_type') === 'private' ? 'selected' : '' %>>Личный автомобиль</option>
+          </select>
+        </div>
+
+        <!-- Максимальная цена -->
+        <div class="filters__group">
+          <label class="form__label" for="h-maxPrice">Макс. цена, ₽</label>
+          <input class="form__input" type="number" id="h-maxPrice" name="maxPrice"
+                 value="<%= val('maxPrice') %>" min="0" placeholder="100 000">
+        </div>
+      </div>
+
+      <div class="filters__actions">
+        <button class="btn btn--primary" type="submit">Найти</button>
+        <a class="btn btn--secondary" href="/">Сбросить</a>
+        <span class="filters__hint">
+          <% if (_total > 0) { %>
+            Найдено: <%= _total %> <%= plural(_total, ['тур', 'тура', 'туров']) %>
+          <% } %>
+        </span>
+      </div>
+    </form>
+
+    <!-- ─── Сетка карточек ─── -->
+    <% if (_tours.length === 0) { %>
+      <div class="empty-state">
+        <div class="empty-state__icon">🔭</div>
+        <h2 class="empty-state__title">Туры не найдены</h2>
+        <p class="empty-state__text">Попробуйте изменить параметры поиска или сбросить фильтры.</p>
+        <a class="btn btn--primary" href="/">Сбросить фильтры</a>
+      </div>
+    <% } else { %>
+      <div class="cards cards--home" id="tours-grid">
+        <% _tours.forEach(function (tour) { %>
+          <%
+            const src = imgPath(tour.image);
+            const href = '/tours/' + tour.id;
+          %>
+          <article class="card">
+            <!-- Верх: прямоугольное фото + бейджи страны и звёздности -->
+            <a class="card__image" href="<%= href %>" aria-label="<%= tour.title %>">
+              <% if (src) { %>
+                <img src="<%= src %>" alt="<%= tour.title %>" loading="lazy"
+                     onerror="this.closest('.card__image').classList.add('card__image--empty'); this.remove();">
+              <% } else { %>
+                <div class="card__image--ph" style="position:absolute;inset:0;background:var(--grad-card);"></div>
+              <% } %>
+              <div class="card__badge">
+                <% if (tour.destination_country) { %>
+                  <span class="badge badge--country"><%= tour.destination_country %></span>
+                <% } %>
+                <% if (tour.hotel_stars) { %>
+                  <span class="badge badge--stars"><%= stars(tour.hotel_stars) %></span>
+                <% } %>
+              </div>
+            </a>
+
+            <div class="card__body">
+              <h3 class="card__title"><a href="<%= href %>"><%= tour.title %></a></h3>
+
+              <!-- Маршрут -->
+              <div class="card__route">
+                <%= tour.departure_city || '' %>
+                <span class="card__route-arrow">✈</span>
+                <%= tour.destination_city || '' %>
+                <% if (tour.destination_country && tour.destination_country !== tour.destination_city) { %>
+                  <span class="card__route-country">· <%= tour.destination_country %></span>
+                <% } %>
+              </div>
+
+              <!-- Условия поездки -->
+              <ul class="card__list">
+                <% if (tour.hotel_name) { %>
+                  <li class="card__list-item">
+                    <span class="card__list-icon">🏨</span>
+                    <span><%= tour.hotel_name %></span>
+                  </li>
+                <% } %>
+                <% if (tour.hotel_meal) { %>
+                  <li class="card__list-item">
+                    <span class="card__list-icon">🍽</span>
+                    <span>Питание: <span class="badge badge--meal"><%= mealMap[tour.hotel_meal] || tour.hotel_meal %></span></span>
+                  </li>
+                <% } %>
+                <% if (tour.nights || tour.flight_duration) { %>
+                  <li class="card__list-item">
+                    <span class="card__list-icon">🌙</span>
+                    <span>
+                      <% if (tour.nights) { %><%= tour.nights %> <%= plural(tour.nights, ['ночь', 'ночи', 'ночей']) %><% } %>
+                      <% if (tour.nights && tour.flight_duration) { %> · <% } %>
+                      <% if (tour.flight_duration) { %>⏱ <%= tour.flight_duration %><% } %>
+                    </span>
+                  </li>
+                <% } %>
+                <% if (tour.transfer_type) { %>
+                  <li class="card__list-item">
+                    <span class="card__list-icon">🚐</span>
+                    <span>Трансфер: <span class="badge badge--transfer"><%= transferMap[tour.transfer_type] || tour.transfer_type %></span></span>
+                  </li>
+                <% } %>
+              </ul>
+
+              <!-- Низ: крупная итоговая цена + переход на страницу тура -->
+              <div class="card__footer">
+                <span class="card__price"><%= price(tour.total_price) %> ₽</span>
+                <a class="btn btn--primary btn--sm" href="<%= href %>">Подробнее</a>
+              </div>
+            </div>
+          </article>
+        <% }); %>
+      </div>
+
+      <!-- ─── Подгрузка следующих порций (public/js/main.js) ─── -->
+      <div class="load-more" id="load-more-wrap">
+        <% if (_tours.length < _total) { %>
+          <button class="btn btn--primary btn--lg" type="button" id="load-more-tours"
+                  data-offset="<%= _tours.length %>" data-limit="<%= _pageSize %>">Показать ещё</button>
+        <% } %>
+      </div>
+    <% } %>
   </div>
 </section>
 
