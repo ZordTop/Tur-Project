@@ -27,3 +27,15 @@ docker-compose*.yml
 # Временные файлы
 tmp
 temp
+
+# Загруженные клиентами файлы (фото, сканы паспортов) не должны попадать
+# в образ: в runtime папка подключается volume'ом uploads_data.
+# .gitkeep оставляем — он создаёт структуру папок внутри образа,
+# и именованный volume при первом монтировании наследует её с правами node.
+uploads/*
+!uploads/photos
+!uploads/passports
+uploads/photos/*
+!uploads/photos/.gitkeep
+uploads/passports/*
+!uploads/passports/.gitkeep

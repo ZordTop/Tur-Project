@@ -13,6 +13,7 @@ const csrf = require('./middlewares/csrf');
 const flash = require('./middlewares/flash');
 const pool = require('./db/pool');
 const { parseFilters, buildConditions } = require('./utils/tourFilters');
+const { validatePhone } = require('./utils/validators');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -160,8 +161,14 @@ app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), async (r
   try {
     const tourId = Number(req.body.tour_id);
     const client_name = String(req.body.client_name || '').trim().slice(0, 150);
-    const client_phone = String(req.body.client_phone || '').trim().slice(0, 30);
     const comment = String(req.body.comment || '').trim().slice(0, 1000);
+
+    // Телефон нормализуем через общий валидатор: в базу должны попадать только
+    // цифры (по контракту — 11 цифр). Если менеджер ввел иностранный или
+    // нестандартный номер, валидатор вернёт null — тогда сохраняем строку как
+    // есть, не блокируя оформление: заявка важнее формата телефона.
+    const rawPhone = String(req.body.client_phone || '').trim();
+    const client_phone = validatePhone(rawPhone) || rawPhone.slice(0, 30);
 
     if (!client_name || !client_phone) {
       req.flash('error', 'Заполните ФИО и телефон клиента.');
