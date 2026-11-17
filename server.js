@@ -11,6 +11,7 @@ const csrf = require('./middlewares/csrf');
 const flash = require('./middlewares/flash');
 const pool = require('./db/pool');
 const { parseFilters, buildConditions } = require('./utils/tourFilters');
+const { validatePhone } = require('./utils/validators');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -80,31 +81,6 @@ app.use('/', authRouter);
 // requireAuth внутри роутера — гость уходит на /login?next=/profile.
 app.use('/profile', profileRouter);
 
-// ─── Личный кабинет: GET /profile ────────────────────────────────────────────
-// По контракту DATA_CONTRACT.md п.4: в шаблон попадают брони пользователя
-// с подтянутым tour_title и total_price.
-app.get('/profile', requireAuth, async (req, res, next) => {
-  try {
-    const [bookings] = await Promise.all([
-      pool.query(
-        `SELECT b.*, t.title AS tour_title, t.total_price, t.departure_at
-         FROM bookings b
-         LEFT JOIN tours t ON t.id = b.tour_id
-         WHERE b.user_id = $1
-         ORDER BY b.created_at DESC`,
-        [req.user.id]
-      ),
-    ]);
-
-    res.render('profile', {
-      title: 'Личный кабинет — Туристический сайт',
-      bookings: bookings.rows,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
 // ─── Панель менеджера: GET /manager (с фильтрами) ────────────────────────────
 // Фильтры совпадают с формой в manager.ejs: destination_country, destination_city,
 // departure_date, flight_class, hotel_stars, hotel_meal, transfer_type, maxPrice.
@@ -145,8 +121,14 @@ app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), async (r
   try {
     const tourId = Number(req.body.tour_id);
     const client_name = String(req.body.client_name || '').trim().slice(0, 150);
-    const client_phone = String(req.body.client_phone || '').trim().slice(0, 30);
     const comment = String(req.body.comment || '').trim().slice(0, 1000);
+
+    // Телефон нормализуем через общий валидатор: в базу должны попадать только
+    // цифры (по контракту — 11 цифр). Если менеджер ввел иностранный или
+    // нестандартный номер, валидатор вернёт null — тогда сохраняем строку как
+    // есть, не блокируя оформление: заявка важнее формата телефона.
+    const rawPhone = String(req.body.client_phone || '').trim();
+    const client_phone = validatePhone(rawPhone) || rawPhone.slice(0, 30);
 
     if (!client_name || !client_phone) {
       req.flash('error', 'Заполните ФИО и телефон клиента.');

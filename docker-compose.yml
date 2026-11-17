@@ -26,6 +26,11 @@ services:
       db:
         condition: service_healthy
     # healthcheck наследуется из Dockerfile и проверяет /healthz
+    # Именованный том для загружаемых клиентами файлов (фото, сканы паспортов).
+    # Содержимое не попадает в образ (dockerignore) и не в git (gitignore),
+    # но persist-ится между перезапусками контейнера.
+    volumes:
+      - uploads_data:/app/uploads
 
   db:
     image: postgres:16-alpine
@@ -52,3 +57,6 @@ services:
 
 volumes:
   pgdata:
+  # Загрузки клиентов (фото и сканы паспортов).
+  # docker compose down его НЕ трогает; полная очистка — docker compose down -v
+  uploads_data:

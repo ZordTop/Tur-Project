@@ -13,6 +13,10 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      # В dev загрузки держим в отдельном именованном томе, а не в bind mount:
+      # том монтируется поверх .:/app, поэтому реальные файлы клиентов
+      # не разбрасываются по рабочей копии репозитория на хосте.
+      - uploads_data:/app/uploads
     command: npm run dev
 
   db:
@@ -20,4 +24,10 @@ services:
     # В production-файле этого проброса нет — см. комментарий в docker-compose.yml.
     ports:
       - "${DB_PORT:-5432}:5432"
+
+# Том объявлен и здесь, и в docker-compose.yml: compose объединяет
+# конфигурации обоих файлов, а при запуске только dev-файла том всё равно
+# должен существовать.
+volumes:
+  uploads_data:
 

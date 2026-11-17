@@ -48,12 +48,6 @@
             <dt>Телефон</dt>
             <dd><%= user && user.phone ? user.phone : '—' %></dd>
           </div>
-          <% if (user && user.created_at) { %>
-            <div class="profile-card__row">
-              <dt>Дата регистрации</dt>
-              <dd><%= fmt(user.created_at) %></dd>
-            </div>
-          <% } %>
         </dl>
       </aside>
 
