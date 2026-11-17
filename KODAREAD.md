@@ -297,3 +297,67 @@ Dev: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`
 | POST /admin/bookings/:id/status | admin | new/confirmed/cancelled (иное → отклонено) |
 | POST /admin/users/:id/role | admin | user/manager/admin; нельзя снять роль с себя |
 | POST /admin/users/:id/block | admin | toggle is_blocked; нельзя заблокировать себя |
+| GET /clients | manager+admin | CRM: список заявок, поиск по ФИО/телефону + фильтры по туру |
+| GET /clients/:id | manager+admin | досье туриста (бронь + тур + менеджер); кривой id → 404 |
+| POST /clients/:id/cancel | manager+admin+csrf | статус → cancelled; flash + возврат в досье |
+| GET /clients/files/:type/:filename | manager+admin | фото/скан паспорта из uploads/ (path traversal закрыт) |
+
+---
+
+## 9. Этап 4 — CRM-база туристов (2026-11-17)
+
+**Задача:** карточки туристов, поиск и фильтр по турам, досье, защищённые файлы, отмена брони.
+
+### 9.1 Что добавлено
+
+| Файл | Что сделано |
+|---|---|
+| `routes/clients.js` (новый) | Роутер CRM. `router.use(requireRole('manager','admin'))` на весь роутер. Маршруты: `/files/:type/:filename`, `/`, `/:id`, `/:id/cancel`. |
+| `server.js` | `const clientsRouter = require('./routes/clients')` + `app.use('/clients', clientsRouter)`. Плюс обёртка EJS-движка (см. 9.3). |
+| `views/clients.ejs` (новый) | Панель поиска/фильтров (search, destination_country, destination_city, maxPrice, hotel_stars, nights, transfer_type) + сетка CRM-карточек с аватаром-заглушкой, статусом, индикатором паспорта и быстрой отменой брони. |
+| `views/client-detail.ejs` (новый) | Досье в 2 колонки: слева фото, ФИО/ДР/телефон/комментарий/источник, паспортные данные с кнопкой «Скопировать», отмена брони; справа скан паспорта (превью + «Открыть оригинал») и детали тура. |
+| `views/partials/header.ejs` | Пункт «База туристов» (`/clients`) — только при `role === 'manager' || 'admin'`. |
+| `public/js/main.js` | Блок 11: `[data-copy]` → `navigator.clipboard.writeText` (+ fallback через textarea), отклик «Скопировано!» на 1.5 с. Блок 12: `form[data-confirm]` → `confirm()` перед отправкой (отмена брони). |
+| `public/css/style.css` | Раздел 26: `.crm-filter`, `.crm-grid`, `.crm-card`, `.crm-avatar`, `.crm-dossier` (2 колонки), `.crm-panel`, `.crm-dl`, бейджи `.badge--docs-ok` / `.badge--docs-missing`, адаптив 960/600 px. |
+| `db/init.js` | Идемпотентная миграция: `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS` для `client_photo`, `birth_date`, `passport_series_number`, `passport_issued_by`, `passport_expires_at`, `passport_scan`. |
+| `uploads/photos/.gitkeep`, `uploads/passports/.gitkeep` | Каталоги для закрытых файлов (Express их не раздаёт как static — только через `/clients/files/...`). |
+
+### 9.2 Как устроены ключевые места
+
+- **Файлы.** `:type` только `photos`/`passports` (иначе 400). Имя обязано совпадать с `path.basename`, не содержать `..` и слешей (Express декодирует `%2e%2e`/`%2f`, поэтому проверок несколько). Дополнительно итоговый путь сверяется с `uploads/<type>`. Нет файла → 404, есть → `res.sendFile` с колбэком (ошибки `send` не превращаются в 500).
+- **Список.** `bookings b JOIN tours t LEFT JOIN users u` (u — менеджер). Поиск: один плейсхолдер на `b.client_name`/`b.client_phone` через `ILIKE`. Фильтры — `parseFilters(req.query)`, но условия собираются локально (`buildClientConditions`), **без** `t.is_active = TRUE`, чтобы были видны брони по архивным турам. Сортировка `b.created_at DESC`.
+- **Досье.** `SELECT b.*, t.*, b.id AS booking_id, u.full_name AS manager_name ...` — алиас `booking_id` обязателен: у `bookings` и `tours` одноимённая колонка `id`, в объекте строки остаётся последняя.
+- **Отмена.** `UPDATE ... WHERE id = $1 AND status != 'cancelled' RETURNING id`; повторная отмена даёт `info`-flash «не найдена или уже отменена», редирект всегда на `/clients/:id`.
+
+### 9.3 Найденный подводный камень EJS (важно на будущее)
+
+Локаль с именем `client` ломала рендер: `ejs.__express` передаёт locals как опции EJS, а `client: true` — это опция «компилировать для браузера». В результате `include('partials/header')` падал с `include is not a function` (500 на `/clients/:id`).
+**Решение:** в `server.js` зарегистрирован свой движок:
+```js
+app.engine('ejs', (filePath, options, callback) => {
+  ejs.renderFile(filePath, options, { client: false }, callback);
+});
+```
+Контракт сохранён — шаблон по-прежнему получает переменную `client`. Тот же эффект дадут любые locals, совпадающие с опциями EJS (`cache`, `debug`, `async`, `root` и т.п.) — движок теперь защищён от этого класса ошибок.
+
+### 9.4 Проверка
+
+- `node --check` — server.js, routes/clients.js, db/init.js, public/js/main.js: OK.
+- EJS: `clients.ejs`, `client-detail.ejs`, header/footer компилируются и рендерятся.
+- Smoke на живой БД (сервер на :3999, DATABASE_URL → контейнер `tur-project-db`), **30/30 PASS**:
+  - гость `/clients` → 302 `/login?next=...`, в шапке гостя ссылки нет;
+  - менеджер: список 200, карточки/бейджи, фильтры сохраняют значения и находят «Туристов», пустое состояние;
+  - досье 200 (паспорт, `data-copy`, скан, детали тура), `/clients/abc` и несуществующий id → 404;
+  - файлы: нет файла → 404, `type=secrets` → 400, `..%2F..%2Fserver.js` → 400, реальная картинка → 200 `image/*`;
+  - отмена брони: 302 → `/clients/2`, flash «Бронирование отменено», статус «Отменена», повторная отмена не падает;
+  - клиент `user` → 302 `/tours?error=access_denied`, админ видит и список, и досье.
+- Регрессия рендеров после правки движка: `/`, `/tours`, `/tours/1`, `/about`, `/login`, `/register`, `/healthz`, `/manager`, `/admin`, `/profile`, `/clients`, `/clients/1` для всех ролей — все 200.
+- Тестовые данные восстановлены (бронь №2 возвращена в `new`), временный файл из `uploads/photos` удалён.
+
+### 9.5 Ограничения этапа (не баги)
+
+- Загрузки файлов через интерфейс нет: фото/сканы кладутся в `uploads/photos` и `uploads/passports` вручную, в БД — только имя файла.
+- В seed нет значений `client_photo`/`passport_scan`, поэтому на демо-данных видны заглушки с инициалами и плашка «Скан паспорта не прикреплён».
+- CRM-поля добавлены в `bookings`, но `DATA_CONTRACT.md` их пока не описывает — контракт стоит обновить на следующем этапе.
+- Страница `/clients` показывает все заявки (включая отменённые) — это осознанно для CRM; при необходимости фильтр по статусу добавляется одной строкой.
+

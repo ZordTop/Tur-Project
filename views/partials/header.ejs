@@ -29,6 +29,12 @@
         <a class="nav__link" href="/tours">Туры</a>
         <a class="nav__link" href="/about">О нас</a>
 
+        <%# CRM-база туристов: только сотрудники (менеджер и админ) %>
+        <% if (typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'manager' || currentUser.role === 'admin')) { %>
+          <a class="nav__link" href="/clients">База туристов</a>
+        <% } %>
+
+
         <% if (typeof currentUser === 'undefined' || !currentUser) { %>
           <!-- Гость: Войти + Регистрация -->
           <div class="nav__actions">

@@ -1,0 +1,205 @@
+<%- include('partials/header') %>
+
+<%
+  /* ── Данные и помощники ── */
+  var _clients = (typeof clients !== 'undefined' && clients) ? clients : [];
+  var _search = (typeof search !== 'undefined' && search) ? search : '';
+  var f = (typeof filters !== 'undefined' && filters) ? filters : {};
+
+  var statusMap = {
+    new:       { label: 'Новая',        cls: 'badge--status-new' },
+    confirmed: { label: 'Подтверждена', cls: 'badge--status-confirmed' },
+    cancelled: { label: 'Отменена',     cls: 'badge--status-cancelled' }
+  };
+
+  // Чтение значения фильтра из объекта filters (null → пустая строка)
+  function val(key) {
+    var v = f[key];
+    return (v === undefined || v === null) ? '' : String(v);
+  }
+
+  function fmtDate(d) {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
+    catch (_) { return String(d); }
+  }
+
+  function price(v) {
+    var n = Number(v);
+    return isNaN(n) ? '—' : n.toLocaleString('ru-RU');
+  }
+
+  function initials(name) {
+    if (!name) return '?';
+    var p = String(name).trim().split(/\s+/);
+    return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : p[0][0].toUpperCase();
+  }
+
+  function routeOf(c) {
+    var country = c.destination_country || '';
+    var city = c.destination_city || '';
+    if (country && city && country !== city) return country + ', ' + city;
+    return country || city || '—';
+  }
+
+  // Признак активного поиска/фильтра — для кнопки «Сбросить»
+  var hasFilters = _search !== '' || ['destination_country', 'destination_city', 'maxPrice', 'hotel_stars', 'nights', 'transfer_type']
+    .some(function (key) { return val(key) !== ''; });
+%>
+
+<section class="section">
+  <div class="container">
+
+    <h1 class="page-title">База туристов</h1>
+    <p class="page-subtitle">
+      Карточки клиентов по заявкам: поиск по ФИО и телефону, фильтры по забронированному туру.
+      Найдено: <strong><%= _clients.length %></strong>.
+    </p>
+
+    <!-- ═══ Панель поиска и фильтрации ═══ -->
+    <form class="crm-filter" method="GET" action="/clients">
+      <div class="crm-filter__grid">
+        <div class="crm-filter__field crm-filter__field--search">
+          <label class="form__label" for="cf-search">Поиск по клиенту</label>
+          <input class="form__input" type="text" id="cf-search" name="search"
+                 value="<%= _search %>" placeholder="ФИО или телефон">
+        </div>
+
+        <div class="crm-filter__field">
+          <label class="form__label" for="cf-country">Страна прилёта</label>
+          <input class="form__input" type="text" id="cf-country" name="destination_country"
+                 value="<%= val('destination_country') %>" placeholder="все">
+        </div>
+
+        <div class="crm-filter__field">
+          <label class="form__label" for="cf-city">Город прилёта</label>
+          <input class="form__input" type="text" id="cf-city" name="destination_city"
+                 value="<%= val('destination_city') %>" placeholder="все">
+        </div>
+
+        <div class="crm-filter__field">
+          <label class="form__label" for="cf-price">Бюджет до, ₽</label>
+          <input class="form__input" type="number" id="cf-price" name="maxPrice" min="1" step="1000"
+                 value="<%= val('maxPrice') %>" placeholder="любой">
+        </div>
+
+        <div class="crm-filter__field">
+          <label class="form__label" for="cf-stars">Звёзды отеля</label>
+          <select class="form__input" id="cf-stars" name="hotel_stars">
+            <option value="">любые</option>
+            <% for (var s = 2; s <= 5; s++) { %>
+              <option value="<%= s %>" <%= val('hotel_stars') === String(s) ? 'selected' : '' %>><%= s %>★ и выше</option>
+            <% } %>
+          </select>
+        </div>
+
+        <div class="crm-filter__field">
+          <label class="form__label" for="cf-nights">Ночей от</label>
+          <input class="form__input" type="number" id="cf-nights" name="nights" min="1"
+                 value="<%= val('nights') %>" placeholder="любое">
+        </div>
+
+        <div class="crm-filter__field">
+          <label class="form__label" for="cf-transfer">Трансфер</label>
+          <select class="form__input" id="cf-transfer" name="transfer_type">
+            <option value="">любой</option>
+            <option value="bus" <%= val('transfer_type') === 'bus' ? 'selected' : '' %>>Общий автобус</option>
+            <option value="private" <%= val('transfer_type') === 'private' ? 'selected' : '' %>>Личный автомобиль</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="crm-filter__actions">
+        <button class="btn btn--primary" type="submit">Найти</button>
+        <a class="btn btn--secondary" href="/clients"<%= hasFilters ? '' : ' aria-disabled="true"' %>>Сбросить</a>
+      </div>
+    </form>
+
+    <!-- ═══ Сетка карточек клиентов ═══ -->
+    <% if (_clients.length === 0) { %>
+      <div class="empty-state">
+        <div class="empty-state__icon">🗂</div>
+        <h3 class="empty-state__title">Туристы не найдены</h3>
+        <p class="empty-state__text">
+          <% if (hasFilters) { %>
+            Попробуйте изменить условия поиска или сбросить фильтры.
+          <% } else { %>
+            В базе пока нет заявок — они появятся после бронирования клиентом или менеджером.
+          <% } %>
+        </p>
+        <% if (hasFilters) { %>
+          <a class="btn btn--primary" href="/clients">Сбросить фильтры</a>
+        <% } %>
+      </div>
+    <% } else { %>
+      <div class="crm-grid">
+        <% _clients.forEach(function (client) { %>
+          <%
+            var st = statusMap[client.status] || { label: client.status || '—', cls: 'badge--muted' };
+            var hasPassport = !!(client.passport_scan && String(client.passport_scan).trim());
+          %>
+          <article class="crm-card">
+            <div class="crm-card__top">
+              <div class="crm-avatar">
+                <span class="crm-avatar__initials"><%= initials(client.client_name) %></span>
+                <% if (client.client_photo) { %>
+                  <img class="crm-avatar__img"
+                       src="/clients/files/photos/<%= encodeURIComponent(client.client_photo) %>"
+                       alt="Фото: <%= client.client_name %>" loading="lazy"
+                       onerror="this.remove()">
+                <% } %>
+              </div>
+
+              <div class="crm-card__person">
+                <h2 class="crm-card__name"><%= client.client_name %></h2>
+                <p class="crm-card__contact">
+                  <span aria-hidden="true">📞</span> <%= client.client_phone || '—' %>
+                </p>
+                <p class="crm-card__contact">
+                  <span aria-hidden="true">🎂</span> <%= fmtDate(client.birth_date) %>
+                </p>
+              </div>
+            </div>
+
+            <div class="crm-card__badges">
+              <span class="badge <%= st.cls %>"><%= st.label %></span>
+              <% if (hasPassport) { %>
+                <span class="badge badge--docs-ok">✓ Паспорт прикреплён</span>
+              <% } else { %>
+                <span class="badge badge--docs-missing">Нет скана</span>
+              <% } %>
+            </div>
+
+            <div class="crm-card__tour">
+              <h3 class="crm-card__tour-title"><%= client.title || 'Тур #' + client.tour_id %></h3>
+              <p class="crm-card__tour-route">
+                <span aria-hidden="true">✈</span> <%= routeOf(client) %>
+              </p>
+              <p class="crm-card__tour-meta">
+                📅 Вылет: <strong><%= fmtDate(client.departure_at) %></strong>
+                <% if (client.nights) { %> · <%= client.nights %> ноч.<% } %>
+              </p>
+            </div>
+
+            <div class="crm-card__footer">
+              <span class="crm-card__price"><%= price(client.total_price) %> ₽</span>
+              <div class="crm-card__actions">
+                <a class="btn btn--sm btn--primary" href="/clients/<%= client.id %>">Открыть досье</a>
+                <% if (client.status !== 'cancelled') { %>
+                  <form method="POST" action="/clients/<%= client.id %>/cancel"
+                        data-confirm="Отменить бронирование клиента <%= client.client_name %>?">
+                    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+                    <button class="btn btn--sm btn--danger" type="submit">Отменить бронь</button>
+                  </form>
+                <% } %>
+              </div>
+            </div>
+          </article>
+        <% }); %>
+      </div>
+    <% } %>
+
+  </div>
+</section>
+
+<%- include('partials/footer') %>

@@ -1,11 +1,13 @@
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
+const ejs = require('ejs');
 
 const indexRouter = require('./routes/index');
 const toursRouter = require('./routes/tours');
 const authRouter = require('./routes/auth');
 const profileRouter = require('./routes/profile');
+const clientsRouter = require('./routes/clients');
 const { attachCurrentUser, requireAuth, requireRole } = require('./middlewares/auth');
 const csrf = require('./middlewares/csrf');
 const flash = require('./middlewares/flash');
@@ -21,6 +23,15 @@ const HOST = process.env.HOST || '0.0.0.0';
 // Шаблонизатор EJS: файлы лежат в views/, расширение можно не указывать
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+
+// Стандартный ejs.__express передаёт локальные переменные шаблона как опции
+// самого EJS. Из-за этого локаль `client` (досье туриста, routes/clients.js)
+// воспринимается как опция client:true — EJS переключается в режим компиляции
+// для браузера, и include('partials/header') падает с «include is not a function».
+// Оборачиваем движок и жёстко фиксируем серверный режим.
+app.engine('ejs', (filePath, options, callback) => {
+  ejs.renderFile(filePath, options, { client: false }, callback);
+});
 
 // Разбор данных из HTML-форм (POST-запросы)
 app.use(express.urlencoded({ extended: false }));
@@ -80,6 +91,35 @@ app.use('/', authRouter);
 // Личный кабинет клиента (п. 3 раздела 4 контракта): его брони с деталями тура.
 // requireAuth внутри роутера — гость уходит на /login?next=/profile.
 app.use('/profile', profileRouter);
+
+// CRM-база туристов (этап 4): доступ только manager/admin — проверка роли
+// внутри роутера. Раздаёт фото/сканы из uploads/, поиск, досье, отмену брони.
+app.use('/clients', clientsRouter);
+
+// ─── Личный кабинет: GET /profile ────────────────────────────────────────────
+// По контракту DATA_CONTRACT.md п.4: в шаблон попадают брони пользователя
+// с подтянутым tour_title и total_price.
+app.get('/profile', requireAuth, async (req, res, next) => {
+  try {
+    const [bookings] = await Promise.all([
+      pool.query(
+        `SELECT b.*, t.title AS tour_title, t.total_price, t.departure_at
+         FROM bookings b
+         LEFT JOIN tours t ON t.id = b.tour_id
+         WHERE b.user_id = $1
+         ORDER BY b.created_at DESC`,
+        [req.user.id]
+      ),
+    ]);
+
+    res.render('profile', {
+      title: 'Личный кабинет — Туристический сайт',
+      bookings: bookings.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ─── Панель менеджера: GET /manager (с фильтрами) ────────────────────────────
 // Фильтры совпадают с формой в manager.ejs: destination_country, destination_city,

@@ -122,18 +122,23 @@ const initSQL = `
     passport_scan     VARCHAR(255)                   -- скан/фото паспорта
   );
 
-  -- ─── Миграция для уже существующей базы ───
-  -- CREATE TABLE IF NOT EXISTS обновляет схему только на чистой базе.
-  -- Если таблицы созданы раньше (до расширения контракта), эта ветка
-  -- добавит недостающие колонки. ADD COLUMN IF NOT EXISTS идемпотентна:
-  -- повторный запуск ничего не меняет и НЕ удаляет существующие данные,
-  -- поэтому db/init.js по-прежнему можно запускать повторно.
-  ALTER TABLE bookings ADD COLUMN IF NOT EXISTS birth_date           DATE;
-  ALTER TABLE bookings ADD COLUMN IF NOT EXISTS passport_series_number VARCHAR(20);
-  ALTER TABLE bookings ADD COLUMN IF NOT EXISTS passport_issued_by   VARCHAR(255);
-  ALTER TABLE bookings ADD COLUMN IF NOT EXISTS passport_expires_at  DATE;
-  ALTER TABLE bookings ADD COLUMN IF NOT EXISTS client_photo         VARCHAR(255);
-  ALTER TABLE bookings ADD COLUMN IF NOT EXISTS passport_scan        VARCHAR(255);
+  -- ─── CRM-поля туриста (этап 4): досье и защищённые файлы ───
+  -- Отдельный ALTER, а не колонки внутри CREATE TABLE: так миграция
+  -- применяется и к уже существующей базе (IF NOT EXISTS делает её
+  -- безопасной при повторном запуске init.js).
+  --   client_photo           — имя файла в uploads/photos/
+  --   birth_date             — дата рождения туриста
+  --   passport_series_number — серия и номер паспорта (строка «1234 567890»)
+  --   passport_issued_by     — кем выдан
+  --   passport_expires_at    — срок действия
+  --   passport_scan          — имя файла в uploads/passports/
+  ALTER TABLE bookings
+    ADD COLUMN IF NOT EXISTS client_photo           VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS birth_date             DATE,
+    ADD COLUMN IF NOT EXISTS passport_series_number VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS passport_issued_by     VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS passport_expires_at    DATE,
+    ADD COLUMN IF NOT EXISTS passport_scan          VARCHAR(255);
 
 
   -- ─── Индексы: почему поиск становится быстрее ───

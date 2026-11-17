@@ -1,0 +1,247 @@
+<%- include('partials/header') %>
+
+<%
+  var c = (typeof client !== 'undefined' && client) ? client : null;
+
+  var statusMap = {
+    new:       { label: 'Новая',        cls: 'badge--status-new' },
+    confirmed: { label: 'Подтверждена', cls: 'badge--status-confirmed' },
+    cancelled: { label: 'Отменена',     cls: 'badge--status-cancelled' }
+  };
+
+  var flightClassMap = { economy: 'Эконом', comfort: 'Комфорт', business: 'Бизнес' };
+  var mealMap = { RO: 'Без питания', BB: 'Только завтраки', HB: 'Полупансион', AI: 'Всё включено' };
+  var transferMap = { bus: 'Общий автобус', private: 'Личный автомобиль' };
+
+  function fmtDate(d) {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
+    catch (_) { return String(d); }
+  }
+
+  function fmtDateTime(d) {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+    catch (_) { return String(d); }
+  }
+
+  function price(v) {
+    var n = Number(v);
+    return isNaN(n) ? '—' : n.toLocaleString('ru-RU');
+  }
+
+  function initials(name) {
+    if (!name) return '?';
+    var p = String(name).trim().split(/\s+/);
+    return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : p[0][0].toUpperCase();
+  }
+
+  function stars(n) {
+    var k = Number(n) || 0;
+    return k > 0 ? '★'.repeat(k) : '—';
+  }
+
+  var st = c ? (statusMap[c.status] || { label: c.status || '—', cls: 'badge--muted' }) : null;
+  var hasPassportScan = !!(c && c.passport_scan && String(c.passport_scan).trim());
+  var bookingId = c ? (c.booking_id != null ? c.booking_id : c.id) : null;
+  var source = '—';
+  if (c) {
+    if (c.user_id) source = 'Клиент оформил сам на сайте';
+    else if (c.manager_name) source = 'Оформил менеджер: ' + c.manager_name;
+  }
+%>
+
+<section class="section">
+  <div class="container">
+
+    <a class="back-link" href="/clients">← Назад к базе туристов</a>
+
+    <% if (!c) { %>
+      <div class="empty-state">
+        <div class="empty-state__icon">🔍</div>
+        <h3 class="empty-state__title">Заявка не найдена</h3>
+        <p class="empty-state__text">Возможно, бронь была удалена. Вернитесь к списку туристов.</p>
+        <a class="btn btn--primary" href="/clients">К базе туристов</a>
+      </div>
+    <% } else { %>
+
+      <div class="crm-dossier-head">
+        <div>
+          <h1 class="page-title" style="margin-bottom:6px;">Досье туриста</h1>
+          <p class="page-subtitle" style="margin-bottom:0;">
+            Заявка №<%= bookingId %> от <%= fmtDateTime(c.created_at) %>
+          </p>
+        </div>
+        <div class="crm-card__badges">
+          <span class="badge <%= st.cls %>"><%= st.label %></span>
+          <% if (hasPassportScan) { %>
+            <span class="badge badge--docs-ok">✓ Паспорт прикреплён</span>
+          <% } else { %>
+            <span class="badge badge--docs-missing">Нет скана</span>
+          <% } %>
+        </div>
+      </div>
+
+      <div class="crm-dossier">
+
+        <!-- ═══ Левая колонка: досье и паспортные данные ═══ -->
+        <div class="crm-dossier__col">
+
+          <div class="crm-panel">
+            <div class="crm-photo">
+              <div class="crm-avatar crm-avatar--lg">
+                <span class="crm-avatar__initials"><%= initials(c.client_name) %></span>
+                <% if (c.client_photo) { %>
+                  <img class="crm-avatar__img"
+                       src="/clients/files/photos/<%= encodeURIComponent(c.client_photo) %>"
+                       alt="Фото: <%= c.client_name %>"
+                       onerror="this.remove()">
+                <% } %>
+              </div>
+            </div>
+
+            <h2 class="crm-panel__title"><%= c.client_name %></h2>
+
+            <dl class="crm-dl">
+              <div class="crm-dl__row">
+                <dt>Дата рождения</dt>
+                <dd><%= fmtDate(c.birth_date) %></dd>
+              </div>
+              <div class="crm-dl__row">
+                <dt>Телефон</dt>
+                <dd><a href="tel:<%= c.client_phone %>"><%= c.client_phone || '—' %></a></dd>
+              </div>
+              <div class="crm-dl__row">
+                <dt>Комментарий к заявке</dt>
+                <dd><%= c.comment ? c.comment : '—' %></dd>
+              </div>
+              <div class="crm-dl__row">
+                <dt>Источник оформления</dt>
+                <dd><%= source %></dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="crm-panel">
+            <h3 class="crm-panel__title">Паспортные данные</h3>
+
+            <div class="crm-passport-row">
+              <div>
+                <span class="crm-dl__label">Серия и номер</span>
+                <p class="crm-passport-number"><%= c.passport_series_number || '—' %></p>
+              </div>
+              <% if (c.passport_series_number) { %>
+                <button class="btn btn--sm btn--secondary crm-copy"
+                        type="button"
+                        data-copy="<%= c.passport_series_number %>">Скопировать</button>
+              <% } %>
+            </div>
+
+            <dl class="crm-dl">
+              <div class="crm-dl__row">
+                <dt>Кем выдан</dt>
+                <dd><%= c.passport_issued_by || '—' %></dd>
+              </div>
+              <div class="crm-dl__row">
+                <dt>Срок действия</dt>
+                <dd><%= fmtDate(c.passport_expires_at) %></dd>
+              </div>
+            </dl>
+          </div>
+
+          <% if (c.status !== 'cancelled') { %>
+            <form method="POST" action="/clients/<%= bookingId %>/cancel"
+                  class="crm-cancel"
+                  data-confirm="Отменить бронирование клиента <%= c.client_name %>?">
+              <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+              <button class="btn btn--danger btn--block" type="submit">Отменить бронь</button>
+            </form>
+          <% } else { %>
+            <p class="crm-cancelled-note">Бронирование отменено — действия недоступны.</p>
+          <% } %>
+        </div>
+
+        <!-- ═══ Правая колонка: скан паспорта и детали тура ═══ -->
+        <div class="crm-dossier__col">
+
+          <div class="crm-panel">
+            <h3 class="crm-panel__title">Скан / ксерокс паспорта</h3>
+
+            <% if (hasPassportScan) { %>
+              <a class="crm-scan" href="/clients/files/passports/<%= encodeURIComponent(c.passport_scan) %>"
+                 target="_blank" rel="noopener">
+                <img class="crm-scan__img"
+                     src="/clients/files/passports/<%= encodeURIComponent(c.passport_scan) %>"
+                     alt="Скан паспорта: <%= c.client_name %>">
+              </a>
+              <p class="crm-scan__hint">
+                <a href="/clients/files/passports/<%= encodeURIComponent(c.passport_scan) %>"
+                   target="_blank" rel="noopener">Открыть оригинал в новой вкладке</a>
+              </p>
+            <% } else { %>
+              <div class="crm-scan-empty">
+                <span class="crm-scan-empty__icon" aria-hidden="true">📄</span>
+                <p>Скан паспорта не прикреплён</p>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="crm-panel">
+            <h3 class="crm-panel__title">Детали забронированного тура</h3>
+
+            <h4 class="crm-tour-name">
+              <% if (c.tour_id) { %>
+                <a href="/tours/<%= c.tour_id %>"><%= c.title %></a>
+              <% } else { %>
+                <%= c.title || '—' %>
+              <% } %>
+            </h4>
+            <p class="crm-tour-sub">
+              <%= c.departure_city || '—' %> → <%= c.destination_city || '—' %>
+              <% if (c.destination_country && c.destination_country !== c.destination_city) { %>
+                · <%= c.destination_country %>
+              <% } %>
+            </p>
+
+            <dl class="crm-dl">
+              <div class="crm-dl__row">
+                <dt>Перелёт</dt>
+                <dd>
+                  <%= fmtDateTime(c.departure_at) %>
+                  <% if (c.arrival_at) { %> → <%= fmtDateTime(c.arrival_at) %><% } %>
+                  <% if (c.flight_duration) { %> · <%= c.flight_duration %><% } %>
+                  · <%= flightClassMap[c.flight_class] || c.flight_class || '—' %>
+                  · <%= price(c.flight_price) %> ₽
+                </dd>
+              </div>
+              <div class="crm-dl__row">
+                <dt>Отель</dt>
+                <dd>
+                  <%= c.hotel_name || '—' %> <%= stars(c.hotel_stars) %>
+                  <% if (c.nights) { %> · <%= c.nights %> ноч.<% } %>
+                  · <%= price(c.hotel_price) %> ₽
+                </dd>
+              </div>
+              <div class="crm-dl__row">
+                <dt>Питание</dt>
+                <dd><%= mealMap[c.hotel_meal] || c.hotel_meal || '—' %></dd>
+              </div>
+              <div class="crm-dl__row">
+                <dt>Трансфер</dt>
+                <dd><%= transferMap[c.transfer_type] || c.transfer_type || '—' %> · <%= price(c.transfer_price) %> ₽</dd>
+              </div>
+              <div class="crm-dl__row">
+                <dt>Итоговая цена</dt>
+                <dd class="crm-total"><%= price(c.total_price) %> ₽</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+
+      </div>
+    <% } %>
+
+  </div>
+</section>
+
+<%- include('partials/footer') %>
