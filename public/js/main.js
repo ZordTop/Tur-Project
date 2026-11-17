@@ -218,4 +218,169 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
+
+  // ── 10. Витрина главной: подгрузка туров «Показать ещё» ──
+  // Кнопка #load-more-tours (views/index.ejs) хранит, сколько карточек уже
+  // показано (data-offset) и размер порции (data-limit). Запрос идёт в тот же
+  // GET /tours, но с format=json: фильтры берём из адресной строки, поэтому
+  // подгрузка работает и после поиска через форму.
+  const loadMoreBtn = document.getElementById('load-more-tours');
+  if (loadMoreBtn) {
+    const grid = document.getElementById('tours-grid');
+    const wrap = document.getElementById('load-more-wrap') || loadMoreBtn.parentElement;
+
+    // Подписи кодов — те же, что в EJS-шаблонах (DATA_CONTRACT.md, п. 2)
+    const MEAL_LABELS = { RO: 'Без питания', BB: 'Только завтраки', HB: 'Полупансион', AI: 'Всё включено' };
+    const TRANSFER_LABELS = { bus: 'Общий автобус', private: 'Личный автомобиль' };
+
+    // Экранирование: строки из БД вставляются как HTML
+    const esc = (value) =>
+      String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const fmtPrice = (value) => {
+      if (value == null || value === '') return '—';
+      const number = Number(value);
+      return Number.isNaN(number) ? String(value) : number.toLocaleString('ru-RU');
+    };
+
+    const plural = (n, forms) => {
+      const abs = Math.abs(n) % 100;
+      const last = abs % 10;
+      if (abs > 10 && abs < 20) return forms[2];
+      if (last > 1 && last < 5) return forms[1];
+      if (last === 1) return forms[0];
+      return forms[2];
+    };
+
+    const imgPath = (img) => {
+      if (!img) return null;
+      if (img.charAt(0) === '/' || /^https?:\/\//.test(img)) return img;
+      return '/images/' + img;
+    };
+
+    const stars = (n) => '★'.repeat(Math.max(0, Math.min(5, Number(n) || 0)));
+
+    // Карточка повторяет разметку из views/index.ejs один в один
+    function buildTourCard(tour) {
+      const href = '/tours/' + Number(tour.id);
+      const title = esc(tour.title);
+      const src = imgPath(tour.image);
+
+      const image = src
+        ? `<img src="${esc(src)}" alt="${title}" loading="lazy" onerror="this.closest('.card__image').classList.add('card__image--empty'); this.remove();">`
+        : '<div class="card__image--ph" style="position:absolute;inset:0;background:var(--grad-card);"></div>';
+
+      const badges =
+        (tour.destination_country
+          ? `<span class="badge badge--country">${esc(tour.destination_country)}</span>`
+          : '') +
+        (Number(tour.hotel_stars)
+          ? `<span class="badge badge--stars">${stars(tour.hotel_stars)}</span>`
+          : '');
+
+      const country =
+        tour.destination_country && tour.destination_country !== tour.destination_city
+          ? `<span class="card__route-country">· ${esc(tour.destination_country)}</span>`
+          : '';
+
+      const route =
+        '<div class="card__route">' +
+        esc(tour.departure_city || '') +
+        '<span class="card__route-arrow">✈</span>' +
+        esc(tour.destination_city || '') +
+        country +
+        '</div>';
+
+      const hotel = tour.hotel_name
+        ? `<li class="card__list-item"><span class="card__list-icon">🏨</span><span>${esc(tour.hotel_name)}</span></li>`
+        : '';
+
+      const meal = tour.hotel_meal
+        ? `<li class="card__list-item"><span class="card__list-icon">🍽</span><span>Питание: <span class="badge badge--meal">${esc(MEAL_LABELS[tour.hotel_meal] || tour.hotel_meal)}</span></span></li>`
+        : '';
+
+      const durationParts = [];
+      if (tour.nights) {
+        durationParts.push(`${Number(tour.nights)} ${plural(Number(tour.nights), ['ночь', 'ночи', 'ночей'])}`);
+      }
+      if (tour.flight_duration) {
+        durationParts.push(`⏱ ${esc(tour.flight_duration)}`);
+      }
+      const duration = durationParts.length
+        ? `<li class="card__list-item"><span class="card__list-icon">🌙</span><span>${durationParts.join(' · ')}</span></li>`
+        : '';
+
+      const transfer = tour.transfer_type
+        ? `<li class="card__list-item"><span class="card__list-icon">🚐</span><span>Трансфер: <span class="badge badge--transfer">${esc(TRANSFER_LABELS[tour.transfer_type] || tour.transfer_type)}</span></span></li>`
+        : '';
+
+      return `<article class="card">
+  <a class="card__image" href="${href}" aria-label="${title}">
+    ${image}
+    <div class="card__badge">${badges}</div>
+  </a>
+  <div class="card__body">
+    <h3 class="card__title"><a href="${href}">${title}</a></h3>
+    ${route}
+    <ul class="card__list">${hotel}${meal}${duration}${transfer}</ul>
+    <div class="card__footer">
+      <span class="card__price">${fmtPrice(tour.total_price)} ₽</span>
+      <a class="btn btn--primary btn--sm" href="${href}">Подробнее</a>
+    </div>
+  </div>
+</article>`;
+    }
+
+    loadMoreBtn.addEventListener('click', async () => {
+      if (loadMoreBtn.disabled) return;
+
+      const offset = Number(loadMoreBtn.dataset.offset) || 0;
+      const limit = Number(loadMoreBtn.dataset.limit) || 6;
+      const label = loadMoreBtn.textContent;
+
+      // Текущие фильтры + параметры порции
+      const params = new URLSearchParams(window.location.search);
+      params.set('format', 'json');
+      params.set('offset', String(offset));
+      params.set('limit', String(limit));
+
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.textContent = 'Загрузка…';
+
+      try {
+        const response = await fetch('/tours?' + params.toString(), {
+          headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+
+        const data = await response.json();
+        const tours = Array.isArray(data.tours) ? data.tours : [];
+
+        if (grid && tours.length > 0) {
+          grid.insertAdjacentHTML('beforeend', tours.map(buildTourCard).join(''));
+        }
+
+        loadMoreBtn.dataset.offset = String(offset + tours.length);
+
+        if (!data.hasMore || tours.length === 0) {
+          // Плавное скрытие: переход задан в .load-more (style.css)
+          wrap.classList.add('is-hidden');
+          setTimeout(() => wrap.remove(), 320);
+        } else {
+          loadMoreBtn.disabled = false;
+          loadMoreBtn.textContent = label;
+        }
+      } catch (err) {
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = label;
+        console.error('Не удалось подгрузить туры:', err);
+        alert('Не удалось загрузить туры. Проверьте соединение и попробуйте ещё раз.');
+      }
+    });
+  }
 });
