@@ -44,8 +44,10 @@ router.get('/', async (req, res, next) => {
 
     res.render('tours', {
       title: 'Все туры — Туристический сайт',
-      tours: toursResult.rows,
-      countries: countriesResult.rows.map((row) => row.destination_country),
+      tours,
+      countries,
+      // filters — те же имена, что и параметры query-строки и колонки БД,
+      // поэтому форма поиска после фильтрации показывает выбранные значения
       filters,
     });
   } catch (err) {
@@ -53,23 +55,11 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// GET /tours/:id — один активный тур. Скрытый (is_active = false) и несуществующий
-// дают одинаковый ответ: next() → общий 404-обработчик из server.js.
+// GET /tours/:id — один активный тур. Скрытый (is_active = false) и
+// несуществующий дают одинаковый ответ: next() → общий 404-обработчик.
 router.get('/:id', async (req, res, next) => {
   try {
-    const id = Number(req.params.id);
-
-    // /tours/abc и /tours/-5 не доходят до базы: сразу 404
-    if (!Number.isInteger(id) || id <= 0) {
-      return next();
-    }
-
-    const result = await pool.query(
-      'SELECT * FROM tours WHERE id = $1 AND is_active = TRUE',
-      [id]
-    );
-    const tour = result.rows[0];
-
+    const tour = await findActiveTourById(req.params.id);
     if (!tour) {
       return next();
     }
