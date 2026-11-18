@@ -73,4 +73,13 @@ router.get('/about', (req, res) => {
   res.render('about', { title: 'О нас — Туристический сайт' });
 });
 
+// Правовые страницы
+router.get('/privacy', (req, res) => {
+  res.render('privacy', { title: 'Политика конфиденциальности' });
+});
+
+router.get('/terms', (req, res) => {
+  res.render('terms', { title: 'Правила использования сайта' });
+});
+
 module.exports = router;
