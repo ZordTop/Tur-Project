@@ -13,7 +13,8 @@ const csrf = require('./middlewares/csrf');
 const flash = require('./middlewares/flash');
 const pool = require('./db/pool');
 const { parseFilters, buildConditions } = require('./utils/tourFilters');
-const { validatePhone } = require('./utils/validators');
+const { validateBookingData } = require('./utils/validators');
+const { uploadBookingDocs, removeUploadedFiles, getUploadedFileName } = require('./middlewares/upload');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -96,31 +97,6 @@ app.use('/profile', profileRouter);
 // внутри роутера. Раздаёт фото/сканы из uploads/, поиск, досье, отмену брони.
 app.use('/clients', clientsRouter);
 
-// ─── Личный кабинет: GET /profile ────────────────────────────────────────────
-// По контракту DATA_CONTRACT.md п.4: в шаблон попадают брони пользователя
-// с подтянутым tour_title и total_price.
-app.get('/profile', requireAuth, async (req, res, next) => {
-  try {
-    const [bookings] = await Promise.all([
-      pool.query(
-        `SELECT b.*, t.title AS tour_title, t.total_price, t.departure_at
-         FROM bookings b
-         LEFT JOIN tours t ON t.id = b.tour_id
-         WHERE b.user_id = $1
-         ORDER BY b.created_at DESC`,
-        [req.user.id]
-      ),
-    ]);
-
-    res.render('profile', {
-      title: 'Личный кабинет — Туристический сайт',
-      bookings: bookings.rows,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
 // ─── Панель менеджера: GET /manager (с фильтрами) ────────────────────────────
 // Фильтры совпадают с формой в manager.ejs: destination_country, destination_city,
 // departure_date, flight_class, hotel_stars, hotel_meal, transfer_type, maxPrice.
@@ -156,24 +132,11 @@ app.get('/manager', requireAuth, requireRole('admin', 'manager'), async (req, re
 });
 
 // POST /manager/book — заявка, оформленная менеджером.
-// Форма в manager.ejs отправляет tour_id, client_name, client_phone, comment.
-app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), async (req, res, next) => {
+// Форма в manager.ejs отправляет анкету туриста и файлы в multipart/form-data.
+// middleware uploadBookingDocs обрабатывает файлы, затем хендлер валидирует паспортные данные.
+app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), uploadBookingDocs, async (req, res, next) => {
   try {
     const tourId = Number(req.body.tour_id);
-    const client_name = String(req.body.client_name || '').trim().slice(0, 150);
-    const comment = String(req.body.comment || '').trim().slice(0, 1000);
-
-    // Телефон нормализуем через общий валидатор: в базу должны попадать только
-    // цифры (по контракту — 11 цифр). Если менеджер ввел иностранный или
-    // нестандартный номер, валидатор вернёт null — тогда сохраняем строку как
-    // есть, не блокируя оформление: заявка важнее формата телефона.
-    const rawPhone = String(req.body.client_phone || '').trim();
-    const client_phone = validatePhone(rawPhone) || rawPhone.slice(0, 30);
-
-    if (!client_name || !client_phone) {
-      req.flash('error', 'Заполните ФИО и телефон клиента.');
-      return res.redirect('/manager');
-    }
 
     // Проверяем, что тур существует.
     const tourResult = await pool.query(
@@ -181,19 +144,40 @@ app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), async (r
       [tourId]
     );
     if (!tourResult.rows[0]) {
+      removeUploadedFiles(req);
       req.flash('error', 'Выбранный тур не найден.');
       return res.redirect('/manager');
     }
 
+    // Валидация анкеты туриста (без дефолтов — менеджер заполняет все поля).
+    const validation = validateBookingData(req.body);
+
+    if (!validation.ok) {
+      removeUploadedFiles(req);
+      req.flash('error', validation.errors.join(' '));
+      return res.redirect('/manager');
+    }
+
+    // Сохраняем имена загруженных файлов (или null).
+    const client_photo = getUploadedFileName(req, 'client_photo');
+    const passport_scan = getUploadedFileName(req, 'passport_scan');
+
+    const v = validation.values;
+
     await pool.query(
-      `INSERT INTO bookings (tour_id, user_id, manager_id, client_name, client_phone, comment, status)
-       VALUES ($1, NULL, $2, $3, $4, $5, 'new')`,
-      [tourId, req.user.id, client_name, client_phone, comment || null]
+      `INSERT INTO bookings (tour_id, user_id, manager_id, client_name, client_phone,
+       birth_date, passport_series_number, passport_issued_by, passport_expires_at,
+       client_photo, passport_scan, comment, status)
+       VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'confirmed')`,
+      [tourId, req.user.id, v.client_name, v.client_phone, v.birth_date,
+       v.passport_series_number, v.passport_issued_by, v.passport_expires_at,
+       client_photo, passport_scan, v.comment]
     );
 
     req.flash('success', `Заявка на «${tourResult.rows[0].title}» оформлена.`);
     res.redirect('/manager');
   } catch (err) {
+    removeUploadedFiles(req);
     next(err);
   }
 });
@@ -559,12 +543,15 @@ app.use((req, res) => {
   res.status(404).render('404', { title: 'Страница не найдена' });
 });
 
-// Обработчик ошибок: Express узнаёт его по четырём аргументам
+// Обработчик ошибок: Express узнаёт его по четырём аргументам.
+// Наружу отдаём подробности только в development: в production текст ошибки
+// БД/файловой системы может раскрыть внутреннее устройство приложения.
 app.use((err, req, res, next) => {
   console.error(err.stack);
+  const isDev = process.env.NODE_ENV !== 'production';
   res.status(500).render('error', {
     title: 'Ошибка сервера',
-    message: err.message,
+    message: isDev ? err.message : 'Внутренняя ошибка сервера. Попробуйте позже.',
     status: 500,
   });
 });

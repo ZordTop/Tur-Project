@@ -437,7 +437,64 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ── 13. Конструктор туров (админ-панель, Этап 5) ──
+  // ── 13. Мини-превью загружаемых файлов (Этап 3) ──────────────────────────
+  // Поля: client_photo, passport_scan (tour.ejs и manager.ejs).
+  // Контейнер превью: #preview_client_photo, #preview_passport_scan
+  // и их аналоги с префиксом "bp-" в manager.ejs.
+  (function filePreviews() {
+    const MAX_SIZE = 5 * 1024 * 1024;
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
+
+    const fileInputs = document.querySelectorAll('input[type="file"][name="client_photo"], input[type="file"][name="passport_scan"]');
+
+    fileInputs.forEach((input) => {
+      // Ищем контейнер превью: id="preview_<name>" или id="bp-preview_<name>"
+      const name = input.name;
+      const preview = document.getElementById('preview_' + name) || document.getElementById('bp-preview_' + name);
+      if (!preview) return;
+
+      input.addEventListener('change', () => {
+        const file = input.files && input.files[0];
+        preview.innerHTML = '';
+
+        if (!file) return;
+
+        // Проверка MIME-типа
+        if (!ALLOWED.includes(file.type)) {
+          preview.innerHTML = '<span class="file-preview__error">Недопустимый формат. Разрешены JPG, PNG, WEBP.</span>';
+          input.value = '';
+          return;
+        }
+
+        // Проверка размера
+        if (file.size > MAX_SIZE) {
+          const mb = (file.size / 1024 / 1024).toFixed(1);
+          preview.innerHTML = `<span class="file-preview__error">Файл ${mb} МБ превышает 5 МБ.</span>`;
+          input.value = '';
+          return;
+        }
+
+        // Создаём превью
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = document.createElement('img');
+          img.src = e.target.result;
+          img.className = 'file-preview__thumb';
+          img.alt = file.name;
+
+          const info = document.createElement('span');
+          info.className = 'file-preview__info';
+          info.textContent = `${file.name} (${(file.size / 1024).toFixed(0)} КБ)`;
+
+          preview.appendChild(img);
+          preview.appendChild(info);
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+  })();
+
+  // ── 14. Конструктор туров (админ-панель, Этап 5) ──
   (function tourBuilder() {
     const toggle = document.getElementById('tour-builder-toggle');
     const body = document.getElementById('tour-builder-body');

@@ -7,10 +7,10 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middlewares/auth');
+const { uploadBookingDocs, removeUploadedFiles, getUploadedFileName } = require('../middlewares/upload');
+const { validateBookingData } = require('../utils/validators');
 // Единая обработка фильтров для каталога и панели менеджера (см. utils/tourFilters.js)
 const { parseFilters, buildConditions } = require('../utils/tourFilters');
-// Нормализация телефона (см. utils/validators.js)
-const { validatePhone } = require('../utils/validators');
 
 const router = express.Router();
 
@@ -147,12 +147,15 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST /tours/:id/book — самостоятельная заявка авторизованного клиента.
-// Форма страницы тура отправляет только комментарий; id тура берётся из URL,
-// данные клиента — из профиля (req.user), роль менеджера не заполняется.
-router.post('/:id/book', requireAuth, async (req, res, next) => {
+// Форма страницы тура отправляет анкету туриста и файлы в multipart/form-data.
+// middleware uploadBookingDocs обрабатывает файлы и перекладывает их в req.files,
+// а текстовые поля — в req.body. Затем хендлер валидирует паспортные данные.
+router.post('/:id/book', requireAuth, uploadBookingDocs, async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
+      // Файлы уже приняты multer — на диске они не нужны, раз заявки не будет.
+      removeUploadedFiles(req);
       return next();
     }
 
@@ -163,26 +166,43 @@ router.post('/:id/book', requireAuth, async (req, res, next) => {
     );
     const tour = tourResult.rows[0];
     if (!tour) {
+      removeUploadedFiles(req);
       return next();
     }
 
-    const comment =
-      typeof req.body.comment === 'string' ? req.body.comment.trim().slice(0, 1000) : '';
+    // 1. Валидация анкеты. Для клиента подставляем данные из профиля как fallback.
+    const validation = validateBookingData(req.body, {
+      defaultName: req.user.full_name,
+      defaultPhone: req.user.phone,
+    });
 
-    // Телефон из профиля может быть в старом формате (пробелы, +7).
-    // Нормализуем здесь, чтобы в bookings всегда попадал канонический формат.
-    const rawPhone = String(req.user.phone || '');
-    const client_phone = validatePhone(rawPhone) || rawPhone.slice(0, 30);
+    if (!validation.ok) {
+      removeUploadedFiles(req);
+      req.flash('error', validation.errors.join(' '));
+      return res.redirect(`/tours/${id}`);
+    }
+
+    // 2. Сохраняем имена загруженных файлов (или null, если не прикрепляли).
+    const client_photo = getUploadedFileName(req, 'client_photo');
+    const passport_scan = getUploadedFileName(req, 'passport_scan');
+
+    const v = validation.values;
 
     await pool.query(
-      `INSERT INTO bookings (tour_id, user_id, client_name, client_phone, comment, status)
-       VALUES ($1, $2, $3, $4, $5, 'new')`,
-      [id, req.user.id, req.user.full_name, client_phone, comment || null]
+      `INSERT INTO bookings (tour_id, user_id, client_name, client_phone,
+       birth_date, passport_series_number, passport_issued_by, passport_expires_at,
+       client_photo, passport_scan, comment, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'new')`,
+      [id, req.user.id, v.client_name, v.client_phone, v.birth_date,
+       v.passport_series_number, v.passport_issued_by, v.passport_expires_at,
+       client_photo, passport_scan, v.comment]
     );
 
     req.flash('success', `Заявка на тур «${tour.title}» создана. Менеджер свяжется с вами для подтверждения.`);
     res.redirect('/profile');
   } catch (err) {
+    // На случай ошибки сохранения: подчищаем файлы
+    removeUploadedFiles(req);
     next(err);
   }
 });

@@ -293,11 +293,11 @@
     <button class="modal__close" type="button" data-sidebar-close aria-label="Закрыть">×</button>
   </div>
 
-  <div class="sidebar__body">
+      <div class="sidebar__body">
     <!-- tour_id — обязательное поле по DATA_CONTRACT.md (bookings.tour_id, FK → tours.id) -->
-    <form method="POST" action="/manager/book" class="form bp-form">
-      <% // CSRF-токен (middlewares/csrf.js) — без него POST /manager/book отклоняется с 403 %>
-      <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+    <form method="POST" action="/manager/book?_csrf=<%= csrfToken %>" enctype="multipart/form-data" class="form bp-form">
+      <% // CSRF-токен в query (form enctype="multipart/form-data" блокирует req.body — csrf читает из query) %>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <input type="hidden" name="tour_id" value="">
 
       <!-- Краткая сводка выбранного тура -->
@@ -328,8 +328,43 @@
 
       <div class="form__group">
         <label class="form__label" for="bp-client_phone">Телефон клиента <span style="color:var(--clr-danger);">*</span></label>
-        <input class="form__input" type="tel" id="bp-client_phone" name="client_phone" placeholder="+7-900-000-00-00" autocomplete="off" inputmode="tel" maxlength="30" required>
-        <span class="bp-hint">формат произвольный, максимум 30 символов</span>
+        <input class="form__input" type="tel" id="bp-client_phone" name="client_phone" placeholder="79001234567" inputmode="tel" maxlength="11" pattern="[0-9]{11}" required>
+        <span class="bp-hint">ровно 11 цифр</span>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-birth_date">Дата рождения <span style="color:var(--clr-danger);">*</span></label>
+        <input class="form__input" type="date" id="bp-birth_date" name="birth_date" required>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-passport_series_number">Серия и номер паспорта <span style="color:var(--clr-danger);">*</span></label>
+        <input class="form__input" type="text" id="bp-passport_series_number" name="passport_series_number" placeholder="4510123456" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" required>
+        <span class="bp-hint">ровно 10 цифр (4 цифры серии + 6 цифр номера)</span>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-passport_issued_by">Кем выдан паспорт <span style="color:var(--clr-danger);">*</span></label>
+        <input class="form__input" type="text" id="bp-passport_issued_by" name="passport_issued_by" placeholder="Отделом УФМС г. Москвы по району…" maxlength="255" required>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-passport_expires_at">Срок действия паспорта <span style="color:var(--clr-danger);">*</span></label>
+        <input class="form__input" type="date" id="bp-passport_expires_at" name="passport_expires_at" required>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-client_photo">Фотография туриста</label>
+        <input class="form__input" type="file" id="bp-client_photo" name="client_photo" accept="image/jpeg,image/png,image/webp">
+        <span class="bp-hint">JPG, PNG или WEBP, до 5 МБ.</span>
+        <div id="bp-preview_client_photo" class="file-preview" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-passport_scan">Ксерокс / скан паспорта</label>
+        <input class="form__input" type="file" id="bp-passport_scan" name="passport_scan" accept="image/jpeg,image/png,image/webp">
+        <span class="bp-hint">JPG, PNG или WEBP, до 5 МБ.</span>
+        <div id="bp-preview_passport_scan" class="file-preview" style="margin-top:8px;"></div>
       </div>
 
       <div class="form__group">

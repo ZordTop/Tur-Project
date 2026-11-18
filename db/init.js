@@ -135,10 +135,27 @@ const initSQL = `
   ALTER TABLE bookings
     ADD COLUMN IF NOT EXISTS client_photo           VARCHAR(255),
     ADD COLUMN IF NOT EXISTS birth_date             DATE,
-    ADD COLUMN IF NOT EXISTS passport_series_number VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS passport_series_number VARCHAR(20),
     ADD COLUMN IF NOT EXISTS passport_issued_by     VARCHAR(255),
     ADD COLUMN IF NOT EXISTS passport_expires_at    DATE,
     ADD COLUMN IF NOT EXISTS passport_scan          VARCHAR(255);
+
+  -- Выравниваем длину серии/номера паспорта: в CREATE TABLE — VARCHAR(20),
+  -- в первых миграциях было VARCHAR(50). Меняем тип только если в данных нет
+  -- значений длиннее 20 символов — иначе ALTER упал бы и остановил init.js.
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'bookings'
+        AND column_name = 'passport_series_number'
+        AND character_maximum_length > 20
+    ) AND NOT EXISTS (
+      SELECT 1 FROM bookings WHERE char_length(passport_series_number) > 20
+    ) THEN
+      ALTER TABLE bookings ALTER COLUMN passport_series_number TYPE VARCHAR(20);
+    END IF;
+  END $$;
 
 
   -- ─── Индексы: почему поиск становится быстрее ───

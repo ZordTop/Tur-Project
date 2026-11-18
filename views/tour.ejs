@@ -4,6 +4,16 @@
   /* ── Вспомогательные функции (безопасны при отсутствии полей) ── */
   var user = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
 
+  // Телефон профиля приводим к формату поля ввода (11 цифр, первая 7 или 8).
+  // У старых аккаунтов номер хранится как «8 989 497-09-94»: в поле с
+  // pattern="[0-9]{11}" такое значение не прошло бы браузерную проверку.
+  var userPhone = String((user && user.phone) || '').replace(/\D/g, '');
+  if (!/^[78]\d{10}$/.test(userPhone)) userPhone = '';
+
+  // Куда вернуть гостя после входа/регистрации — обратно на этот тур.
+  var tourId = tour.id != null ? tour.id : (typeof id !== 'undefined' ? id : '');
+  var bookNext = encodeURIComponent('/tours/' + tourId);
+
   // Маппинг ENUM-значений БД → человекочитаемые подписи
   var flightClassMap = { economy: 'Эконом', comfort: 'Комфорт', business: 'Бизнес' };
   var mealMap = { RO: 'Без питания', BB: 'Только завтраки', HB: 'Полупансион', AI: 'Всё включено' };
@@ -43,7 +53,6 @@
   }
 
   var imgSrc = imgPath(tour.image);
-  var bookAction = '/tours/' + (tour.id != null ? tour.id : (typeof id !== 'undefined' ? id : '')) + '/book';
 %>
 
 <section class="section">
@@ -105,7 +114,7 @@
     </article>
 
     <!-- ═══ 2. Детализация пакета: перелёт / проживание / трансфер ═══ -->
-    <h2 class="section__title" style="margin-top:44px;">Что входит в стоимость</h2>
+    <h2 class="section__title">Что входит в стоимость</h2>
 
     <div class="package">
       <!-- Блок «Перелёт» -->
@@ -296,9 +305,57 @@
           </div>
         </dl>
 
-        <form method="POST" action="<%= bookAction %>" class="form auth-card__form" style="max-width:none;">
-          <% // CSRF-токен (middlewares/csrf.js); id тура бэкенд берёт из URL (/tours/:id/book) %>
-          <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+        <form method="POST" action="/tours/<%= tour.id %>/book?_csrf=<%= csrfToken %>" enctype="multipart/form-data" class="form auth-card__form" style="max-width:none;">
+          <% // CSRF-токен в query (form enctype="multipart/form-data" блокирует req.body — csrf читает из query) %>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+          <h3 style="margin: 0 0 12px;">Анкета туриста</h3>
+
+          <div class="form__group">
+            <label class="form__label" for="client_name">ФИО туриста <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="text" id="client_name" name="client_name" value="<%= user.full_name || '' %>" placeholder="Иванов Иван Иванович" autocomplete="name" maxlength="150" required>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="client_phone">Телефон <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="tel" id="client_phone" name="client_phone" value="<%= userPhone %>" placeholder="79001234567" inputmode="tel" maxlength="11" pattern="[0-9]{11}" required>
+            <span class="form__hint">Ровно 11 цифр, без пробелов и скобок</span>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="birth_date">Дата рождения <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="date" id="birth_date" name="birth_date" required>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="passport_series_number">Серия и номер паспорта <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="text" id="passport_series_number" name="passport_series_number" placeholder="4510123456" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" required>
+            <span class="form__hint">Ровно 10 цифр (4 цифры серии + 6 цифр номера)</span>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="passport_issued_by">Кем выдан паспорт <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="text" id="passport_issued_by" name="passport_issued_by" placeholder="Отделом УФМС г. Москвы по району…" maxlength="255" required>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="passport_expires_at">Срок действия паспорта <span style="color:var(--clr-danger);">*</span></label>
+            <input class="form__input" type="date" id="passport_expires_at" name="passport_expires_at" required>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="client_photo">Фотография туриста</label>
+            <input class="form__input" type="file" id="client_photo" name="client_photo" accept="image/jpeg,image/png,image/webp">
+            <span class="form__hint">JPG, PNG или WEBP, до 5 МБ. Мини-превью появится сразу после выбора.</span>
+            <div id="preview_client_photo" class="file-preview" style="margin-top:8px;"></div>
+          </div>
+
+          <div class="form__group">
+            <label class="form__label" for="passport_scan">Ксерокс / скан паспорта</label>
+            <input class="form__input" type="file" id="passport_scan" name="passport_scan" accept="image/jpeg,image/png,image/webp">
+            <span class="form__hint">JPG, PNG или WEBP, до 5 МБ.</span>
+            <div id="preview_passport_scan" class="file-preview" style="margin-top:8px;"></div>
+          </div>
 
           <div class="form__group">
             <label class="form__label" for="comment">Комментарий к заявке</label>
@@ -320,10 +377,10 @@
       <% } else { %>
         <div class="booking-guest">
           <p class="booking-guest__text">
-            Чтобы забронировать тур, <a href="/login">войдите</a> в аккаунт или
-            <a href="/register">зарегистрируйтесь</a> — это займёт минуту.
+            Чтобы забронировать тур, <a href="/login?next=<%= bookNext %>">войдите</a> в аккаунт или
+            <a href="/register?next=<%= bookNext %>">зарегистрируйтесь</a> — это займёт минуту.
           </p>
-          <a class="btn btn--primary" href="/login">Войдите, чтобы забронировать</a>
+          <a class="btn btn--primary" href="/login?next=<%= bookNext %>">Войдите, чтобы забронировать</a>
         </div>
       <% } %>
     </section>

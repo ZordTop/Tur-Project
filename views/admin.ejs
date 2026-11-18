@@ -237,7 +237,7 @@
                 <div style="display:flex; gap:6px; flex-wrap:wrap;">
                   <button class="btn btn--sm btn--accent" type="button"
                     data-edit-tour
-                    data-tour='<%- JSON.stringify({
+                    data-tour="<%= JSON.stringify({
                       id: t.id,
                       title: t.title,
                       description: t.description,
@@ -258,7 +258,7 @@
                       hotel_price: t.hotel_price,
                       transfer_type: t.transfer_type,
                       transfer_price: t.transfer_price
-                    }) %>'
+                    }) %>"
                   >Редактировать</button>
                   <form method="post" action="/admin/tours/<%= t.id %>/active" style="display:inline;">
                     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
