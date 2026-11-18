@@ -2,9 +2,9 @@
 
 > **Назначение:** Моя рабочая памятка. В новом чате достаточно написать «прочитай KODAREAD.md» — и я знаю структуру проекта, историю исправлений и что осталось на будущее.
 >
-> **Статус (2026-11-18, исправления после аудита):** в коде реализованы базовая ревизия и этапы **1, 3, 4, 5**. Витрина главной с фильтрами и кнопкой «Показать ещё» (фактический этап 2) в этой памятке отдельно не описывалась, но работает. Все **13 дефектов**, найденных при финальном аудите, исправлены и проверены на живом сервере; что осталось осознанным отклонением — в §11.
+> **Статус (2026-11-18, финальная свёрка):** в коде реализованы базовая ревизия и этапы **1, 3, 4, 5**. Все **16 дефектов**, найденных при аудите, исправлены; добавлены правовые страницы, фикс 500 конструктора, расширение seed до 18 заявок с демо-сканом паспорта. Docker: `tur-project-app` + `tur-project-db` — healthy (app в dev-режиме с bind mount).
 >
-> **HEAD на момент записи:** `9c5c8d6` (`feat`), незакоммичено только это обновление памятки. Docker: `tur-project-app` + `tur-project-db` — healthy (app в dev-режиме с bind mount).
+> **HEAD на момент записи:** `9385c5f` (`fix: make turcard`), незакоммичено только обновление памятки.
 
 ---
 
@@ -133,7 +133,7 @@
 |---|---|---|
 | Пользователи | 3 (1 admin / 1 manager / 1 user) | **6** (1 / 2 / 3), телефоны в формате 11 цифр |
 | Туры | 5, картинки `.svg`, 2 страны | **14**, реальные `.jpg`/`.webp`, 10 стран, 25 000–250 000 ₽ |
-| Заявки | 0 | **5** (3 клиентские + 2 менеджерские), с полным паспортным блоком |
+| Заявки | 0 | **5** (3 клиентские + 2 менеджерские), с полным паспортным блоком. **Расширено до 18** — см. §12.3 |
 
 Разнообразие для проверки фильтров: звёзды 2/3/4/5, питание RO/BB/HB/AI, классы economy/comfort/business, трансфер bus(6)/private(8), ночей 3–11, города вылета Москва/СПб. `total_price` = сумма трёх блоков (проверено SQL: 0 расхождений). Идемпотентность сохранена (проверка `count(*) tours > 0`), пул закрывается в `finally`.
 
@@ -171,13 +171,14 @@ Tur-Project/
 ├── Dockerfile / docker-compose.yml / docker-compose.dev.yml   ← + volume uploads_data
 ├── .gitignore / .dockerignore                                 ← + игнор uploads/*
 ├── DATA_CONTRACT.md       ← контракт таблиц (bookings расширена блоком 4) и переменных шаблонов
-├── PROJECT_ANALYSIS.md    ← переписан 2026-11-17 под состояние после этапа 1
+├── PROJECT_ANALYSIS.md    ← обновлён 2026-11-18 под текущее состояние
+├── start_site.bat         ← ⭐ новое: локальный скрипт запуска (в .gitignore)
 │
 ├── uploads/               ← ⭐ новое: загрузки клиентов (в Git/образ не попадают)
 │   ├── photos/.gitkeep    ← фото туриста
 │   └── passports/.gitkeep ← скан паспорта
 ├── routes/
-│   ├── index.js           ← GET /, /healthz, /about
+│   ├── index.js           ← GET /, /healthz, /about, /privacy, /terms
 │   ├── tours.js           ← GET /tours (фильтры), GET /tours/:id, POST /tours/:id/book
 │   ├── auth.js            ← login/register (валидация через utils/validators), logout, /me
 │   ├── profile.js         ← ⭐ GET /profile — брони клиента (client_name/phone + детали тура)
@@ -196,16 +197,17 @@ Tur-Project/
 │   ├── init.js            ← CREATE TABLE (users/tours/bookings) + 6 новых колонок
 │   │                        через ALTER ... ADD COLUMN IF NOT EXISTS + индексы; pool.end()
 │   └── seed.js            ← 6 юзеров + 14 туров (реальные .jpg/.webp) + 5 заявок; pool.end()
-├── views/                 ← index, tours, tour, about, login, register,
+├── views/                 ← index, tours, tour, about, privacy, terms, login, register,
 │                            profile, manager, admin, clients, client-detail,
-│                            404, error + partials/(header,footer) — 15 шаблонов
+│                            404, error + partials/(header,footer) — 17 шаблонов
 └── public/
-    ├── css/style.css      ← ~3100 строк: alert, ролевые темы, терминал, CRM,
-    │                        конструктор туров, превью файлов, «Показать ещё»
-    ├── js/main.js         ← 621 строка: бургер, табы, сайдбар, bookPanel,
+    ├── css/style.css      ← ~3040 строк: alert, ролевые темы, терминал, CRM,
+    │                        конструктор туров, превью файлов, правовые документы
+    ├── js/main.js         ← 540 строк: бургер, табы, сайдбар, bookPanel,
     │                        «Показать ещё», копирование, confirm, превью, конструктор
     └── images/            ← 14 реальных фото (.jpg/.webp), на них ссылается seed
                              + 5 старых SVG-заглушек (seed их больше не использует)
+                             + demo-passport.jpg.jpg (образец скана для seed)
 ```
 
 **Удалено:** `data/tours.js` (мёртвое in-memory хранилище), `services/tourService.js` (дубль фильтров с расходящейся логикой, 0 импортов), `tmp_test.js` (тест под удалённый сервис, несовместимый с шаблонами).
@@ -363,6 +365,8 @@ Dev: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`
 | Метод, путь | Защита | Что делает |
 |---|---|---|
 | GET / , /about , /healthz | — | статичные страницы, JSON для healthcheck |
+| GET /privacy | — | Политика конфиденциальности (legal-doc) |
+| GET /terms | — | Правила использования сайта (legal-doc) |
 | GET /tours | — | каталог + 10 фильтров (utils/tourFilters) |
 | GET /tours/:id | — | страница тура; скрытый/кривой id → 404 |
 | POST /tours/:id/book | requireAuth+csrf | заявка от клиента → /profile |
@@ -438,8 +442,8 @@ app.engine('ejs', (filePath, options, callback) => {
 
 ### 9.5 Ограничения этапа (не баги)
 
-- Загрузки файлов через интерфейс нет: фото/сканы кладутся в `uploads/photos` и `uploads/passports` вручную, в БД — только имя файла.
-- В seed нет значений `client_photo`/`passport_scan`, поэтому на демо-данных видны заглушки с инициалами и плашка «Скан паспорта не прикреплён».
+- ~~Загрузки файлов через интерфейс нет~~ → **Закрыто на этапе 3** (`middlewares/upload.js`, multer).
+- ~~В seed нет значений `client_photo`/`passport_scan`~~ → **Закрыто 2026-11-18**: seed копирует `demo-passport.jpg` в `uploads/passports/` и проставляет `passport_scan` всем seed-заявкам (см. §12.3).
 - CRM-поля добавлены в `bookings`, но `DATA_CONTRACT.md` их пока не описывает — контракт стоит обновить на следующем этапе.
 - Страница `/clients` показывает все заявки (включая отменённые) — это осознанно для CRM; при необходимости фильтр по статусу добавляется одной строкой.
 
@@ -591,7 +595,7 @@ app.engine('ejs', (filePath, options, callback) => {
 - Менеджер: `/manager` → `200` (2 контейнера `bp-preview_`, `maxlength="10"`), `/clients` → `200`.
 - Админ: `/admin` → `200`, `data-tour` парсится (14/14).
 - `POST /tours/9/book` без `_csrf` → `403`.
-- БД: **8 users** (6 seed + 2 реальных), **14 tours**, **5 bookings** (3 new / 1 confirmed / 1 cancelled). Записи в БД в ходе проверок не выполнялись.
+- БД: **8 users** (6 seed + 2 реальных), **15 tours** (вкл. id=16 «h» — след ручной проверки), **15 bookings** (id 1–5, 15–24; на чистой базе seed даст 18). Записи в БД в ходе проверок не выполнялись.
 
 ### 11.4 Осознанные отклонения (не исправлялись намеренно)
 
@@ -604,10 +608,80 @@ app.engine('ejs', (filePath, options, callback) => {
 
 ### 11.5 Расхождения документации (остаются)
 
-`DATA_CONTRACT.md` и `PROJECT_ANALYSIS.md` в этой итерации не правились — задача касалась кода и этой памятки.
+`DATA_CONTRACT.md` в этой итерации не правился — задача касалась кода и этой памятки.
 
 - `DATA_CONTRACT.md` §4: фильтры описаны как `{ country, city, maxPrice, nights, hotelStars }`, фактически — snake_case (`destination_country`, `destination_city`, `hotel_stars`, …) плюс `countries` для `/tours` и `filters` для `/manager`.
 - `DATA_CONTRACT.md` §3: `client_photo` / `passport_scan` описаны как путь `/uploads/...`, фактически хранится **имя файла**, раздача — `/clients/files/<type>/<filename>`.
-- `PROJECT_ANALYSIS.md`: устаревшие счётчики (зависимостей 6, шаблонов 15, `main.js` 621 строка, CSS ~3100 строк — сейчас **3315**).
 - `README.md`: упоминает удалённый `data/`, нет PostgreSQL, `db/init.js`, `db/seed.js`, `DATABASE_URL`, `SESSION_SECRET`.
+
+---
+
+## 12. Три финальные задачи (2026-11-18)
+
+### 12.1 А-14: 500 при POST /admin/tours/create (ReferenceError)
+
+**Симптом:** создание тура из конструктора → HTTP 500.
+
+**Причина:** `validateTourData()` объявляла переменные `departureAt`/`arrivalAt` (camelCase, строки 257–258), а в возвращаемом объекте применяла ES6 shorthand `departure_at,` / `arrival_at,` — JS искал несуществующие snake_case-переменные. `node --check` это не ловит (синтаксис корректен). Падало **до** SQL, только при полностью валидной форме (при ошибках валидации — ранний return).
+
+**Исправлено:**
+```js
+departure_at: departureAt,
+arrival_at: arrivalAt,
+```
+
+**Попутно:**
+- `rating`: `(req.body.rating || '').trim()` → `String(req.body.rating ?? '').trim()` (дублирующий query-параметр даёт массив без `.trim()` → TypeError 500).
+- `catch` обоих маршрутов (`create`/`edit`): `next(err)` → `console.error(...)` + `req.flash('error', ...)` + redirect `/admin` (пользователь не видит 500).
+
+**Проверка:** e2e-скрипт — 13/13 PASS (создание → 302, flash, тур в таблице, битый ввод → 302 не 500, rating=9.9 → 302, edit). SQL: `rating` = NULL (numeric), даты корректны, `total_price` сходится.
+
+**Инфраструктурный нюанс:** после правок требовался `docker restart tur-project-app` (дефект A-13: `node --watch` не видит изменения через Windows bind mount).
+
+---
+
+### 12.2 А-15: Правовые страницы `/privacy` и `/terms`
+
+**Задача:** добавить страницы «Политика конфиденциальности» и «Правила использования сайта».
+
+**Реализация:**
+
+| Файл | Что |
+|---|---|
+| `routes/index.js` | `GET /privacy` → `views/privacy.ejs`, `GET /terms` → `views/terms.ejs` |
+| `views/privacy.ejs` (173 строк) | `<article class="legal-doc">`, 5 нумерованных разделов, врезки `.legal-doc__note`, контакты `<dl class="legal-doc__contacts">`, перекрёстная ссылка на `/terms` |
+| `views/terms.ejs` (177 строк) | Аналогичная структура, 5 разделов, ссылка на `/privacy` |
+| `views/partials/footer.ejs` | Блок `.footer__bottom` → `<nav class="footer__legal">` со ссылками `/privacy`, `/terms` |
+| `views/register.ejs` | Под кнопкой — `<p class="auth-card__consent">` со ссылками (`target="_blank" rel="noopener"`) |
+| `public/css/style.css` | Раздел 29: `.legal-doc` (max-width 820px), `__updated`, `__lead`, `__heading`, `__subheading`, `__list`, `__note`, `__contacts`, `__links`, `.footer__bottom`, `.footer__legal`, `.auth-card__consent`, адаптив ≤768px |
+
+**Проверка:** `/`, `/about`, `/tours`, `/tours/1`, `/login`, `/register`, `/privacy`, `/terms` → 200; ссылки в подвале на всех; titles корректны; CSS-скобки 571/571, `var(--color-` = 0.
+
+---
+
+### 12.3 А-16: Расширение seed до 18 заявок + образец паспорта
+
+**Задача:** увеличить количество тестовых заявок для CRM и прикрепить реальный скан паспорта к seed-данным.
+
+**Изменения в `db/seed.js` (966 строк):**
+
+- `prepareDemoPassportScan()` — копирует `public/images/demo-passport.jpg.jpg` → `uploads/passports/demo-passport.jpg` (mkdirSync recursive, copyFileSync при отсутствии/несовпадении размера, ошибка → `null`, не роняет seed).
+- Массив `bookings` расширен **5 → 18**: 7 new / 7 confirmed / 4 cancelled, 8 самостоятельных + 10 через менеджеров, покрытие всех 14 seed-туров, уникальные телефоны (11 цифр `79…`), уникальные паспорта (10 цифр), ДР в прошлом, сроки действия в будущем.
+- Идемпотентность: `MIN_SEED_BOOKINGS = 15`, `needTopUp`, дедупликация по `client_phone|tour_id` (existingKeys), счётчики `skippedExisting`/`skippedFull`/`insertedNew`/`total`.
+- INSERT — 12 колонок с `passport_scan = demoScan`.
+- Шаг 6 (backfill): `UPDATE bookings SET passport_scan=$1 WHERE passport_scan IS NULL AND client_phone = ANY($2::text[])` — реальные заявки не трогаются.
+
+**`db/init.js` не изменён:** `passport_scan VARCHAR(255)` без DEFAULT → NULL по умолчанию.
+
+**Важно:** seed запускать **внутри контейнера** (`docker compose exec app node db/seed.js`), т.к. в dev `uploads/` — volume поверх bind mount.
+
+**Результат:** 1-й прогон — 10 добавлено, 5 backfill → 15 заявок; 2-й прогон идемпотентен. В CRM 15 карточек с `badge--docs-ok` (на чистой базе seed даст 18).
+
+**Проверка CRM:** `/clients` — 15 карточек `.crm-card`, 15 `badge--docs-ok`, 0 `badge--docs-missing`; досье — `<img class="crm-scan__img">` со src `/clients/files/passports/demo-passport.jpg`; файл → 200, image/jpeg, 44291 байт (md5 совпадает).
+
+---
+
+### 12.4 start_site.bat
+
+Локальный скрипт запуска сайта (удобство разработчика). Добавлен в `.gitignore`.
 
