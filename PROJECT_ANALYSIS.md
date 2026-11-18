@@ -1,11 +1,11 @@
 # Полный анализ репозитория Tur-Project
 
-> Последнее обновление: 2026-11-17, **после этапа 1 из 5** (хранилище uploads,
-> расширение `bookings`, `utils/validators.js`, seed на 14 туров / 6 юзеров /
-> 5 заявок). Базовая ревизия — коммит `57bd0c5 fix`, поверх него правки этапа 1.
+> Последнее обновление: 2026-11-18, **финальная свёрка** (все 5 этапов + 16 дефектов
+> исправлены, правовые страницы, seed 18 заявок + demo-passport, фикс конструктора A-14).
+> HEAD `9385c5f`.
 >
 > Документ описывает ТЕКУЩЕЕ состояние проекта. История исправлений —
-> раздел 9 и KODAREAD.md (§0 — этап 1, §4 — полная таблица «было → стало»).
+> раздел 9 и KODAREAD.md (§0–§12 — полная таблица «было → стало»).
 
 ---
 
@@ -20,12 +20,12 @@ Tur-Project/
 ├── docker-compose.dev.yml     # Оверрайд для разработки (+порт БД, +uploads_data)
 ├── Dockerfile                 # Сборка образа (node:20-alpine) + mkdir/chown uploads
 ├── KODAREAD.md                # Служебная памятка AI-ассистента
-├── package.json               # 5 production-зависимостей
+├── package.json               # 6 production-зависимостей
 ├── package-lock.json          # Фиксация версий
 ├── PROJECT_ANALYSIS.md        # Этот отчёт
 ├── README.md                  # Описание для GitHub
 │
-├── server.js                  # Точка входа (~344 строки)
+├── server.js                  # Точка входа (~526 строк)
 │
 ├── uploads/                   # Загрузки клиентов (в Git/образ не попадают)
 │   ├── photos/.gitkeep        # Фото туриста
@@ -33,30 +33,34 @@ Tur-Project/
 │
 ├── db/                        # Работа с PostgreSQL
 │   ├── pool.js                # Пул соединений pg (DATABASE_URL) — 30 строк
-│   ├── init.js                # CREATE TABLE + 6 колонок через ALTER + индексы — ~185 строк
-│   └── seed.js                # 6 пользователей + 14 туров + 5 заявок — ~600 строк
+│   ├── init.js                # CREATE TABLE + 6 колонок через ALTER + индексы — 201 строка
+│   └── seed.js                # 6 пользователей + 14 туров + 18 заявок (с passport_scan) — 966 строк
 │
 ├── middlewares/               # Middleware-функции
 │   ├── auth.js                # attachCurrentUser, requireAuth, requireRole, dropSession
-│   ├── csrf.js                # CSRF-токен (без внешних зависимостей) — 64 строки
-│   └── flash.js               # Одноразовые сообщения req.flash() — 36 строк
+│   ├── csrf.js                # CSRF-токен (без внешних зависимостей) — 53 строки
+│   ├── flash.js               # Одноразовые сообщения req.flash() — 31 строка
+│   └── upload.js              # Multer (этап 3): приём фото/скана, лимиты, чистка файлов
 │
 ├── utils/
 │   ├── tourFilters.js         # parseFilters/buildConditions — единые фильтры
-│   │                            для каталога и панели менеджера — 120 строк
-│   └── validators.js          # validateEmail/Phone/Passport/BirthDate/PassportExpiry — ~170 строк
+│   │                            для каталога и панели менеджера — 106 строк
+│   └── validators.js          # validateEmail/Phone/Passport/BirthDate/PassportExpiry — 184 строки
 │
 ├── routes/
-│   ├── index.js               # /, /healthz, /about
+│   ├── index.js               # /, /healthz, /about, /privacy, /terms
 │   ├── tours.js               # /tours (фильтры), /tours/:id, POST /tours/:id/book
 │   ├── auth.js                # /auth/login, /auth/register, /auth/logout, /auth/me
-│   └── profile.js             # GET /profile — брони клиента с деталями тура
+│   ├── profile.js             # GET /profile — брони клиента с деталями тура
+│   └── clients.js             # CRM (этап 4): список, досье, отмена брони, файлы
 │
 ├── views/
 │   ├── index.ejs              # Главная
 │   ├── tours.ejs              # Список туров + 10 фильтров
 │   ├── tour.ejs               # Детальная страница тура + бронирование
 │   ├── about.ejs              # О нас
+│   ├── privacy.ejs            # Политика конфиденциальности (legal-doc)
+│   ├── terms.ejs              # Правила использования сайта (legal-doc)
 │   ├── login.ejs              # Форма входа (nextUrl + _csrf)
 │   ├── register.ejs           # Форма регистрации (nextUrl + _csrf)
 │   ├── profile.ejs            # Личный кабинет: данные + мои брони
@@ -69,8 +73,8 @@ Tur-Project/
 │       └── footer.ejs         # Подвал + подключение JS
 │
 └── public/
-    ├── css/style.css          # ~2900 строк (включая alert, role-темы, терминал)
-    ├── js/main.js             # 221 строка (бургер, табы, модалки, сайдбар, bookPanel)
+    ├── css/style.css          # ~3040 строк (alert, role-темы, терминал, CRM, конструктор, legal-doc)
+    ├── js/main.js             # 540 строк (бургер, табы, модалки, сайдбар, bookPanel, копи
     └── images/                # 14 реальных фото туров (.jpg/.webp) + 5 SVG-заглушек
 ```
 
@@ -83,7 +87,7 @@ Tur-Project/
 
 ## 2. Подробное описание каждого файла
 
-### 2.1 `server.js` — Точка входа (~344 строки)
+### 2.1 `server.js` — Точка входа (~526 строк)
 
 **Назначение:** Express-приложение: сессии, flash, CSRF, авторизация, панели
 менеджера/админа с CRUD-действиями, обработчики ошибок. Личный кабинет вынесен
@@ -107,6 +111,8 @@ Tur-Project/
 | `GET /manager` | admin+manager | туры через `parseFilters/buildConditions` + 20 последних заявок менеджера; `filters` в шаблон |
 | `POST /manager/book` | admin+manager | INSERT заявки `manager_id = req.user.id, user_id = NULL`; `validatePhone` для телефона (нероссийский — как есть); flash + redirect |
 | `GET /admin` | admin | все туры (включая скрытые), все заявки, все юзеры без password_hash |
+| `POST /admin/tours/create` | admin | Создание нового тура (конструктор): валидация → INSERT |
+| `POST /admin/tours/:id/edit` | admin | Редактирование существующего тура: валидация → UPDATE |
 | `POST /admin/tours/:id/active` | admin | toggle `is_active` |
 | `POST /admin/bookings/:id/status` | admin | статус из `['new','confirmed','cancelled']`, иначе отклонение |
 | `POST /admin/users/:id/role` | admin | роль из `['user','manager','admin']`; запрет снимать роль с себя |
@@ -127,10 +133,12 @@ Tur-Project/
 | GET | `/` | Рендер `index.ejs` |
 | GET | `/healthz` | JSON `{ status, uptime }` — Docker HEALTHCHECK |
 | GET | `/about` | Рендер `about.ejs` |
+| GET | `/privacy` | Политика конфиденциальности — `privacy.ejs` |
+| GET | `/terms` | Правила использования сайта — `terms.ejs` |
 
 ---
 
-### 2.3 `routes/tours.js` (~127 строк)
+### 2.3 `routes/tours.js` (~185 строк)
 
 | Метод | Путь | Защита | Действие |
 |-------|------|--------|----------|
@@ -144,7 +152,7 @@ Tur-Project/
 
 ---
 
-### 2.4 `routes/auth.js` (~215 строк)
+### 2.4 `routes/auth.js` (~180 строк)
 
 | Метод | Путь | Действие |
 |-------|------|----------|
@@ -159,7 +167,7 @@ Tur-Project/
 
 ---
 
-### 2.5 `routes/profile.js` — личный кабинет (~53 строки)
+### 2.5 `routes/profile.js` — личный кабинет (~48 строк)
 
 `GET /profile` (requireAuth): брони текущего пользователя с деталями тура —
 `tour_title`, `total_price`, `departure_at`, `destination_country/city`,
@@ -169,7 +177,7 @@ Tur-Project/
 
 ---
 
-### 2.6 `middlewares/auth.js` (112 строк)
+### 2.6 `middlewares/auth.js` (99 строк)
 
 | Функция | Назначение |
 |---------|------------|
@@ -182,7 +190,7 @@ Tur-Project/
 
 ---
 
-### 2.7 `middlewares/csrf.js` (64 строки)
+### 2.7 `middlewares/csrf.js` (53 строки)
 
 Без внешних библиотек, только встроенный `crypto`:
 1. При отсутствии — генерируется `session.csrfToken = randomBytes(32).hex`.
@@ -196,7 +204,7 @@ Tur-Project/
 
 ---
 
-### 2.8 `middlewares/flash.js` (36 строк)
+### 2.8 `middlewares/flash.js` (31 строка)
 
 Паттерн Post/Redirect/Get:
 - `req.flash('success'|'error'|'info', текст)` — положить сообщение в `session.flash`.
@@ -206,7 +214,7 @@ Tur-Project/
 
 ---
 
-### 2.9 `utils/tourFilters.js` (120 строк)
+### 2.9 `utils/tourFilters.js` (106 строк)
 
 Единая точка правды для фильтров (используют `routes/tours.js` и `GET /manager`):
 
@@ -222,10 +230,10 @@ Tur-Project/
 
 ---
 
-### 2.10 `utils/validators.js` — НОВОЕ (~170 строк)
+### 2.10 `utils/validators.js` — единый модуль валидации (184 строки)
 
-Единый модуль проверки и нормализации данных (этап 1). Пять чистых функций:
-не бросают исключений, при ошибке возвращают `null`.
+Единый модуль проверки и нормализации данных (этап 1 + этап 3). Шесть функций:
+первые пять чистые (не бросают исключений, при ошибке → `null`).
 
 | Функция | Правило |
 |---|---|
@@ -234,6 +242,7 @@ Tur-Project/
 | `validatePassport(raw)` | убрать пробелы → ровно 10 цифр (4 серии + 6 номера) |
 | `validateBirthDate(raw)` | реальная дата `YYYY-MM-DD`, в прошлом, возраст 0–120 лет |
 | `validatePassportExpiry(raw)` | реальная дата, `>= сегодня` (паспорт не просрочен) |
+| `validateBookingData(raw, opts)` | **этап 3**: полная анкета (ФИО, телефон, ДР, паспорт, кем выдан, срок) + `{ defaultName, defaultPhone }`; возвращает `{ ok, values }` или `{ ok, errors }` |
 
 Используется в `routes/auth.js` (регистрация/вход), `server.js`
 (`POST /manager/book`) и `routes/tours.js` (`POST /tours/:id/book`).
@@ -245,7 +254,7 @@ Tur-Project/
 Единственный `Pool` на проект из `process.env.DATABASE_URL`. `pool.on('error')`
 логирует «протухшие» idle-соединения, не роняя процесс.
 
-### 2.12 `db/init.js` (~185 строк)
+### 2.12 `db/init.js` (201 строка)
 
 Идемпотентный `CREATE TABLE IF NOT EXISTS` (users/tours/bookings + 5 индексов)
 строго по DATA_CONTRACT.md. **Этап 1:** таблица `bookings` расширена шестью
@@ -255,20 +264,25 @@ nullable-колонками (`birth_date`, `passport_series_number`, `passport_i
 обновилась без потери данных (миграция проверена отдельно). `pool.end()` в
 `finally`, `process.exitCode = 1` вместо `process.exit`, `.catch` у `init()`.
 
-### 2.13 `db/seed.js` (~600 строк)
+### 2.13 `db/seed.js` (~966 строк)
 
-Идемпотентный (проверка `count(*) tours > 0` + `ON CONFLICT (email)`).
+Идемпотентный (проверка `MIN_SEED_BOOKINGS = 15`, дедупликация по `client_phone|tour_id`).
 **Этап 1:** 6 пользователей (1 admin / 2 manager / 3 user, пароль `TestPass123!`,
-телефоны в формате 11 цифр), **14 туров** и **5 заявок**.
+телефоны в формате 11 цифр), **14 туров**.
+**Расширение 2026-11-18:** **18 заявок** с `passport_scan`.
 
 - Туры: 10 стран (Россия, Турция, Чехия, ОАЭ, Египет, Таиланд, Мальдивы, Абхазия,
   Армения, Азербайджан), бюджеты 25 000–250 000 ₽, звёзды 2–5, все типы питания
   (RO/BB/HB/AI), все классы перелёта, оба типа трансфера. Картинки — 14 реальных
   `.jpg`/`.webp` из `public/images` (SVG-заглушки больше не используются).
-- Заявки: 3 клиентские (`user_id`, `manager_id = NULL`) + 2 менеджерские
-  (`manager_id`, `user_id = NULL`), у всех заполнены ФИО, 11-значный телефон,
-  дата рождения, 10-значный паспорт, кем выдан, срок действия. `client_photo` /
-  `passport_scan` = NULL (файлов в `uploads/` при seed нет).
+- Заявки: 8 самостоятельных + 10 через менеджеров, покрытие всех 14 туров;
+  статусы 7 new / 7 confirmed / 4 cancelled; уникальные телефоны (11 цифр `79…`),
+  паспорта (10 цифр), ДР в прошлом, сроки действия в будущем.
+- `prepareDemoPassportScan()` — копирует `public/images/demo-passport.jpg.jpg`
+  → `uploads/passports/demo-passport.jpg` (mkdirSync, copyFileSync при несовпадении
+  размера, ошибка → `null`, не роняет seed). Все seed-заявки получают `passport_scan`.
+- Backfill: `UPDATE bookings SET passport_scan=$1 WHERE passport_scan IS NULL AND
+  client_phone = ANY($2::text[])` — реальные заявки не трогаются.
 
 `total_price` = flight + hotel + transfer (проверено SQL: 0 расхождений).
 `pool.end()` после seed.
@@ -297,8 +311,10 @@ CSS-градиент.
 
 Детализация пакета (перелёт/проживание/трансфер с ценами блоков), итоговая
 формула цены, блок бронирования: авторизованным — форма POST `/tours/<id>/book`
-(только `comment` + `_csrf`; id тура из URL, данные клиента — из профиля);
-гостям — ссылки вход/регистрация.
+(multipart, CSRF в query; поля: `client_name`/`client_phone` prefill из профиля,
+`birth_date`, `passport_series_number`, `passport_issued_by`, `passport_expires_at`,
+`client_photo`/`passport_scan` file-input'ы, `comment`);
+гостям — ссылки вход/регистрация с `?next=`.
 
 ### 2.17 `views/profile.ejs`
 
@@ -312,16 +328,19 @@ CSS-градиент.
 
 Терминал продаж: форма фильтров (GET /manager, работает — см. 2.9), таблица
 туров с кнопками `data-book-client`, боковая панель (сайдбар) с формой
-POST `/manager/book` (`tour_id` подставляется JS-ом из main.js, `_csrf`,
-ФИО/телефон/заметка), история «Мои оформления» (20 последних).
+POST `/manager/book` (multipart, CSRF в query; `tour_id` подставляется JS-ом
+из main.js, полная анкета: ФИО/телефон/ДР/паспорт/кем выдан/срок действия +
+file-input'ы фото/скана + заметка), история «Мои оформления» (20 последних).
 
 ### 2.19 `views/admin.ejs`
 
-Три раздела с реальными действиями (все формы содержат `_csrf`):
-1. **Туры** — таблица + кнопка «Скрыть/Показать» (`POST /admin/tours/:id/active`).
-2. **Заявки** — таблица + select статуса «new/confirmed/cancelled» + OK
+Три раздела с реальными действиями + конструктор туров (все формы содержат `_csrf`):
+1. **Конструктор** — сворачиваемый блок «Конструктор туров» с live-калькулятором
+   цены (создание и редактирование тура, `data-tour` через `JSON.stringify`).
+2. **Туры** — таблица + кнопка «Скрыть/Показать» (`POST /admin/tours/:id/active`).
+3. **Заявки** — таблица + select статуса «new/confirmed/cancelled» + OK
    (`POST /admin/bookings/:id/status`).
-3. **Пользователи** — select роли + OK (`POST /admin/users/:id/role`), кнопка
+4. **Пользователи** — select роли + OK (`POST /admin/users/:id/role`), кнопка
    «Заблокировать/Разблокировать» (`POST /admin/users/:id/block`).
 
 ### 2.20 `views/login.ejs`, `views/register.ejs`
@@ -330,18 +349,45 @@ POST `/manager/book` (`tour_id` подставляется JS-ом из main.js,
 переменную `next`). Вывод `error`/`errors` (строка/массив/объект). Toggle пароля,
 html-валидация (`minlength=8`, `type=email`).
 
-### 2.21 `public/css/style.css` (~2900 строк)
+### 2.21 `public/css/style.css` (~3040 строк)
 
 CSS-переменные, компоненты (карточки, package-блоки, терминал менеджера,
 админ-таблицы, auth-карточки), **`.alert--success/--error/--info`** (flash),
-ролевые темы `.role-*`, адаптив, reduced-motion.
+ролевые темы `.role-*`, CRM (раздел 26), конструктор туров (раздел 27),
+превью файлов (раздел 28), правовые документы `.legal-doc` + футер + согласие
+(раздел 29), адаптив, reduced-motion.
 
-### 2.22 `public/js/main.js` (221 строка)
+### 2.22 `public/js/main.js` (540 строк)
 
 1. Toggle пароля; 2. бургер; 3. подсветка активного пункта; 4. скрытие битых
 картинок; 5. табы; 6. модалки; 7. сайдбары; 8. `restoreFiltersFromUrl` (fallback,
 основная подсветка теперь серверная через `filters`); 9. `bookPanel` — клик
-«Оформить клиента» подставляет данные тура в hidden `tour_id` и сводку сайдбара.
+«Оформить клиента» подставляет данные тура в hidden `tour_id` и сводку сайдбара;
+10. «Показать ещё»; 11. копирование `[data-copy]`; 12. `form[data-confirm]`;
+13. `filePreviews()`; 14. `tourBuilder()` — калькулятор цены и режим редактирования.
+
+### 2.23 `middlewares/upload.js` — приём файлов (этап 3)
+
+Multer 2.x, diskStorage. Экспортирует: `uploadBookingDocs` (middleware для
+маршрутов бронирования, поля `client_photo`/`passport_scan`, maxCount 1),
+`removeUploadedFiles(req)` (удаление при ошибке валидации), `getUploadedFileName(req, field)`.
+MIME: jpeg/png/webp; лимит 5 МБ; расширение берётся из MIME, не из `originalname`.
+Ни одна ошибка загрузки не даёт 500 — flash + redirect.
+
+### 2.24 `routes/clients.js` — CRM (этап 4)
+
+`router.use(requireRole('manager','admin'))`. Маршруты: `/files/:type/:filename`
+(path traversal закрыт: `basename`, запрет `..`/слешей, сверка пути), `/`
+(список с поиском `ILIKE` и фильтрами `parseFilters`, **без** `is_active` — видны
+архивные брони), `/:id` (досье, алиас `booking_id` обязателен), `/:id/cancel`
+(`UPDATE ... WHERE status != 'cancelled'`).
+
+### 2.25 `views/privacy.ejs`, `views/terms.ejs` — правовые документы
+
+Обёртка `partials/header`/`footer`, `<article class="legal-doc">` (max-width 820px),
+5 нумерованных разделов с подзаголовками, врезки `.legal-doc__note`, контакты
+`<dl class="legal-doc__contacts">`, перекрёстные ссылки. Ссылки на обе страницы —
+в `partials/footer.ejs` (`.footer__legal`) и в `register.ejs` (`.auth-card__consent`).
 
 ---
 
@@ -392,6 +438,8 @@ docker compose exec app node db/seed.js
 | `/` | GET | routes/index.js | — | index.ejs |
 | `/healthz` | GET | routes/index.js | — | JSON |
 | `/about` | GET | routes/index.js | — | about.ejs |
+| `/privacy` | GET | routes/index.js | — | privacy.ejs (legal-doc) |
+| `/terms` | GET | routes/index.js | — | terms.ejs (legal-doc) |
 | `/tours` | GET | routes/tours.js | — | tours.ejs + filters/countries |
 | `/tours/:id` | GET | routes/tours.js | — | tour.ejs (активные) |
 | `/tours/:id/book` | POST | routes/tours.js | auth+csrf | 302 /profile |
@@ -406,6 +454,12 @@ docker compose exec app node db/seed.js
 | `/admin/bookings/:id/status` | POST | server.js | admin+csrf | 302 /admin |
 | `/admin/users/:id/role` | POST | server.js | admin+csrf | 302 /admin |
 | `/admin/users/:id/block` | POST | server.js | admin+csrf | 302 /admin |
+| `/admin/tours/create` | POST | server.js | admin+csrf | 302 /admin (конструктор) |
+| `/admin/tours/:id/edit` | POST | server.js | admin+csrf | 302 /admin (конструктор) |
+| `/clients` | GET | routes/clients.js | manager+admin | clients.ejs (CRM-список) |
+| `/clients/:id` | GET | routes/clients.js | manager+admin | client-detail.ejs (досье) |
+| `/clients/:id/cancel` | POST | routes/clients.js | manager+admin+csrf | 302 /clients/:id |
+| `/clients/files/:type/:filename` | GET | routes/clients.js | manager+admin | res.sendFile (защищённые файлы) |
 | прочее | — | server.js | — | 404.ejs |
 | ошибки | — | server.js | — | error.ejs |
 
@@ -418,7 +472,7 @@ docker compose exec app node db/seed.js
 
 ```
 server.js
-├── routes/index.js ────────────────→ index.ejs, about.ejs
+├── routes/index.js ────────────────→ index.ejs, about.ejs, privacy.ejs, terms.ejs
 ├── routes/tours.js
 │   ├── utils/tourFilters.js (parseFilters, buildConditions)
 │   ├── utils/validators.js (validatePhone)
@@ -428,6 +482,8 @@ server.js
 │   ├── utils/validators.js (validateEmail, validatePhone)
 │   └───────────────────────────────→ login.ejs, register.ejs
 ├── routes/profile.js ──────────────→ profile.ejs
+├── routes/clients.js ──────────────→ clients.ejs, client-detail.ejs (CRM, этап 4)
+├── middlewares/upload.js ────────── multer (этап 3) ← POST /tours/:id/book, /manager/book
 ├── middlewares/csrf.js   ← все POST-формы шлют _csrf
 ├── middlewares/flash.js  ← header.ejs рисует res.locals.flash
 ├── GET/POST /manager(+book)
@@ -524,7 +580,7 @@ data/tours.js, pool.end в db-скриптах, порт БД убран из pr
 3. **bcryptjs синхронный** (10 раундов) — тяжело под большой нагрузкой; вариант: нативный bcrypt/argon2.
 4. **Нет автотестов/CI/линтера** — интеграционные прогоны (71/71 и 52/52) выполнялись вручную, скрипты не закоммичены.
 5. **README.md частично устарел** — в структуре всё ещё упоминается удалённый `data/`, нет PostgreSQL в стеке и шагов init/seed. Не трогали: правили только аналитические документы.
-6. **Загрузка файлов ещё не реализована** — папки, volume и колонки `client_photo`/`passport_scan` готовы, но маршрутов приёма файлов (multer) и `enctype="multipart/form-data"` пока нет; зависимостей не добавляли.
+6. ~~**Загрузка файлов ещё не реализована**~~ → **Закрыто на этапе 3:** `middlewares/upload.js` (multer 2.x, diskStorage), обе формы бронирования — `multipart/form-data` с CSRF в query, seed проставляет `passport_scan` (демо-скан, §2.13).
 7. **`restoreFiltersFromUrl` в main.js** — резервный путь, серверная подсветка через `filters` основная.
 8. **В `tours.ejs` функция `val()`** принимает старые алиасы (`country`, `city`, `hotelStars`, `max_price`) — безвредный legacy.
 9. Сжатие (gzip/brotli) не подключено.
@@ -541,15 +597,15 @@ data/tours.js, pool.end в db-скриптах, порт БД убран из pr
 | База данных | PostgreSQL 16 (pg 8.13) |
 | Таблицы | `users`, `tours`, `bookings` (+6 колонок паспортного блока в `bookings`) |
 | Авторизация | Сессии + bcrypt + роли (user/manager/admin) |
-| Middleware | attachCurrentUser, csrf (свой), flash (свой) |
+| Middleware | attachCurrentUser, csrf (свой), flash (свой), upload (multer) |
 | Валидация | utils/validators.js (email, телефон 11 цифр, паспорт 10 цифр, даты) |
 | Общая логика фильтров | utils/tourFilters.js (10 параметров, каталог + менеджер) |
-| Маршрутов | 18 (вкл. 3 бронировательных и 4 admin-CRUD) |
-| Страниц (шаблонов) | 11 + 2 partials |
-| Production-зависимостей | 5 (новые middleware/валидаторы — без зависимостей) |
+| Маршрутов | 22 (вкл. 3 бронировательных, 4 admin-CRUD, 2 конструктора, 4 CRM, 2 правовых) |
+| Страниц (шаблонов) | 15 + 2 partials |
+| Production-зависимостей | 6 (express, ejs, pg, bcryptjs, express-session, multer) |
 | Docker-сервисы | app + db (порт БД — только в dev) + volume `uploads_data` |
-| Seed | 6 пользователей + 14 туров + 5 заявок |
-| CSS / клиентский JS | ~2900 / 221 строк |
+| Seed | 6 пользователей + 14 туров + 18 заявок (с `passport_scan`) |
+| CSS / клиентский JS | ~3040 / 540 строк |
 | Проверка | smoke 71/71 (ревизия) + 52/52 (этап 1), миграция БД проверена |
 | Healthcheck | GET /healthz каждые 30 сек |
 

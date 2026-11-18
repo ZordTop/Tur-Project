@@ -2,9 +2,13 @@
 // db/seed.js — наполняет пустую базу тестовыми данными
 // ============================================================================
 //
-// Что делает: добавляет 6 пользователей (1 admin, 2 manager, 3 user)
-// и 14 пакетных туров по разным странам, чтобы сайт было на чём посмотреть
-// сразу после создания таблиц.
+// Что делает: добавляет 6 пользователей (1 admin, 2 manager, 3 user),
+// 14 пакетных туров по разным странам и 18 тестовых заявок в CRM-базу
+// туристов, чтобы сайт было на чём посмотреть сразу после создания таблиц.
+//
+// У всех тестовых заявок заполнен паспортный блок и проставлен единый
+// образец скана — uploads/passports/demo-passport.jpg (см. ниже).
+
 //
 // Как запускать:  node db/seed.js   (или npm run db:seed)
 // Порядок важен: сначала db/init.js (появятся таблицы) → потом этот файл
@@ -14,8 +18,70 @@
 //
 // «Seed» — устоявшееся название стартовых данных (от английского «сеять»).
 
+const fs = require('fs');             // копия образца паспорта в uploads/
+const path = require('path');
 const pool = require('./pool');       // общее соединение с базой (см. pool.js)
 const bcrypt = require('bcryptjs');   // библиотека для хэширования паролей
+
+// ============================================================================
+// Образец паспорта для тестовых заявок
+// ============================================================================
+// Картинка-оригинал лежит в public/images, копия кладётся в uploads/passports —
+// именно оттуда сканы раздаёт GET /clients/files/passports/:filename
+// (routes/clients.js:70). В колонке passport_scan хранится только ИМЯ файла,
+// поэтому в БД уходит 'demo-passport.jpg'.
+//
+// Колонка в db/init.js остаётся без DEFAULT (NULL): образец приклеивается
+// ТОЛЬКО к строкам этого seed. Реальные заявки, созданные через формы
+// бронирования, получают passport_scan из загруженного пользователем файла
+// (middlewares/upload.js) либо NULL, если файл не прикреплён.
+//
+// DEMO_PASSPORT_CANDIDATES: в репозитории файл пока лежит как
+// «demo-passport.jpg.jpg» (двойное расширение — артефакт загрузки).
+// Первый существующий вариант считается актуальным, поэтому переименование
+// файла в «demo-passport.jpg» seed не сломает.
+const DEMO_PASSPORT_CANDIDATES = ['demo-passport.jpg.jpg', 'demo-passport.jpg'];
+const DEMO_PASSPORT_NAME = 'demo-passport.jpg';
+const IMAGES_DIR = path.join(__dirname, '..', 'public', 'images');
+const PASSPORTS_DIR = path.join(__dirname, '..', 'uploads', 'passports');
+
+// Кладёт образец в uploads/passports. Возвращает имя файла для колонки
+// passport_scan либо null — если картинки нет или папку не подготовить
+// (тогда seed не пишет в БД ссылку на несуществующий файл).
+function prepareDemoPassportScan() {
+  const source = DEMO_PASSPORT_CANDIDATES
+    .map((name) => path.join(IMAGES_DIR, name))
+    .find((p) => fs.existsSync(p));
+
+  if (!source) {
+    console.warn(
+      '⚠️  Образец паспорта не найден в public/images — ' +
+      'тестовые заявки будут созданы без passport_scan.'
+    );
+    return null;
+  }
+
+  const target = path.join(PASSPORTS_DIR, DEMO_PASSPORT_NAME);
+
+  try {
+    fs.mkdirSync(PASSPORTS_DIR, { recursive: true });
+    // Копируем только если файла нет или он отличается по размеру: повторный
+    // запуск seed не перетирает содержимое без необходимости.
+    if (!fs.existsSync(target) || fs.statSync(target).size !== fs.statSync(source).size) {
+      fs.copyFileSync(source, target);
+      console.log(`✅ Образец паспорта скопирован в uploads/passports/${DEMO_PASSPORT_NAME}`);
+    } else {
+      console.log(`ℹ️  uploads/passports/${DEMO_PASSPORT_NAME} уже на месте — пропускаем копирование.`);
+    }
+  } catch (err) {
+    // Том uploads/ может быть только для чтения — не роняем весь seed.
+    console.error(`⚠️  Не удалось подготовить uploads/passports: ${err.message}`);
+    return null;
+  }
+
+  return DEMO_PASSPORT_NAME;
+}
+
 
 // ============================================================================
 // Шаблоны изображений туров
@@ -529,17 +595,21 @@ async function seed() {
     console.log(`✅ Создан тур: ${t.title} (${t.total_price.toLocaleString('ru-RU')} ₽)`);
   }
 
-  // ─── Шаг 5. Пять тестовых заявок ──────────────────────────────────────────
+  // ─── Шаг 5. Восемнадцать тестовых заявок ──────────────────────────────────
   // Часть заведена клиентами самостоятельно (user_id заполнен, manager_id = NULL),
   // часть оформлена менеджерами (manager_id заполнен, user_id = NULL) — ровно
   // как описано в п. 3 DATA_CONTRACT.md.
   //
-  // Паспортные данные соответствуют новым колонкам bookings:
-  //   birth_date            — дата в прошлом (валидный возраст);
+  // Паспортные данные соответствуют колонкам bookings:
+  //   birth_date             — дата в прошлом (валидный возраст);
   //   passport_series_number — 10 цифр (4 серии + 6 номера);
+  //   passport_issued_by     — кем выдан;
   //   passport_expires_at    — дата в будущем (паспорт не просрочен).
-  // client_photo / passport_scan оставлены NULL: это пути к файлам, а самих
-  // файлов в uploads/ при seed нет — ссылаться было бы не на что.
+  //
+  // client_photo остаётся NULL (фото турист не присылал), а passport_scan у
+  // ВСЕХ тестовых заявок получает имя demo-passport.jpg — тогда в CRM видно
+  // и зелёный бейдж «Паспорт прикреплён», и сам скан в досье.
+
 
   // Не завязываемся на порядок автоинкремента: берём id из БД по email/title.
   const { rows: savedUsers } = await pool.query(
@@ -551,14 +621,59 @@ async function seed() {
   const { rows: savedTours } = await pool.query('SELECT id, title FROM tours');
   const tourIdBy = new Map(savedTours.map((t) => [t.title, Number(t.id)]));
 
-  // Заявки сеем только в пустую таблицу bookings — независимо от того,
-  // создавались ли туры в этом запуске или уже лежали в базе.
-  const { rows: bookingsCount } = await pool.query('SELECT count(*) FROM bookings');
-  const hasBookings = parseInt(bookingsCount[0].count) > 0;
-  if (hasBookings) {
-    console.log('⚠️  В таблице bookings уже есть данные — заявки пропускаем.');
+  // ─── Дозаполнение тестовых заявок ─────────────────────────────────────────
+  // Старый подход: «если bookings не пуста — пропустить целиком».
+  // Новый:
+  //   1) Помечаем уже существующие заявки по ключу «телефон|тур_id» — так
+  //      повторный запуск не заводит дубли уже созданных клиентов.
+  //   2) Если заявок меньше MIN_SEED_BOOKINGS (или база пустая) — дозаполняем
+  //      ВСЕ недостающие строки набора (итого 18), иначе в CRM осталось бы
+  //      ровно 15 карточек из 18 заготовленных.
+  //   3) Если заявок уже 15+ — ничего не добавляем, только чиним passport_scan.
+  //   4) После вставок проставляем demo-passport.jpg у тестовых заявок,
+  //      у которых passport_scan = NULL.
+  //
+  // Ограничиваем backfill только телефонами из нашего набора (client_phone
+  // = ANY($2::text[])) — так мы не затронем реальные заявки, если они есть.
+
+  const MIN_SEED_BOOKINGS = 15;
+  const { rows: bookingsCountRaw } = await pool.query('SELECT count(*)::int AS cnt FROM bookings');
+  const existingCount = Number(bookingsCountRaw[0].cnt);
+  const needTopUp = existingCount < MIN_SEED_BOOKINGS;
+
+  const { rows: existingRows } = await pool.query(
+    'SELECT client_phone, tour_id FROM bookings'
+  );
+  const existingKeys = new Set(
+    existingRows.map((r) => `${r.client_phone}|${r.tour_id}`)
+  );
+  let total = existingCount;
+  let skippedExisting = 0;
+  let skippedFull = 0;
+  let insertedNew = 0;
+
+  if (needTopUp) {
+    console.log(
+      `ℹ️  Заявок в базе: ${existingCount} (меньше ${MIN_SEED_BOOKINGS}) — ` +
+      'дозаполняем недостающие тестовые заявки.'
+    );
+  } else {
+    console.log(
+      `ℹ️  Заявок в базе: ${existingCount} (достаточно) — новые не добавляем, ` +
+      'проверяем только passport_scan.'
+    );
   }
 
+  // Заполняем образец паспорта: копируем в uploads/passports.
+  // Если копия не удалась — passport_scan = null (не роняем seed).
+  const demoScan = prepareDemoPassportScan();
+
+
+
+  // Набор: 18 заявок, покрывающие все 14 туров каталога.
+  //   статусы    — 7 new / 7 confirmed / 4 cancelled;
+  //   оформление — 9 самостоятельных броней (user_id) и 9 через менеджеров;
+  //   телефоны и паспорта уникальны, сроки действия паспортов — в будущем.
   const bookings = [
     {
       // Клиент бронировал сам
@@ -630,17 +745,189 @@ async function seed() {
       comment: '',
       status: 'new',
     },
+    {
+      tour_title: 'Хургада: дары Красного моря',
+      user_email: 'user2@turist.ru',
+      manager_email: null,
+      client_name: 'Светлана Морозова',
+      client_phone: '79161234578',
+      birth_date: '1988-07-19',
+      passport_series_number: '4509654321',
+      passport_issued_by: 'ОВД района Басманный г. Москвы',
+      passport_expires_at: '2030-09-05',
+      comment: 'Интересует дайвинг-пакет, едем вдвоём с мужем.',
+      status: 'confirmed',
+    },
+    {
+      tour_title: 'Пхукет: жемчужина Сиам',
+      user_email: null,
+      manager_email: 'manager@turist.ru',
+      client_name: 'Андрей Лебедев',
+      client_phone: '79214567890',
+      birth_date: '1981-02-14',
+      passport_series_number: '6207112233',
+      passport_issued_by: 'УФМС по Выборгскому району Ленинградской области',
+      passport_expires_at: '2031-03-22',
+      comment: 'Просил взять отель closer к аэропорту, прилёт ранний.',
+      status: 'new',
+    },
+    {
+      tour_title: 'Мальдивы: атолл мечты',
+      user_email: null,
+      manager_email: 'manager2@turist.ru',
+      client_name: 'Наталья Соколова',
+      client_phone: '79032345678',
+      birth_date: '1979-06-30',
+      passport_series_number: '4508554433',
+      passport_issued_by: 'УВД по г. Москве',
+      passport_expires_at: '2029-08-17',
+      comment: 'Годовщина свадьбы, нужна вилла на воде с ужином на пляже.',
+      status: 'confirmed',
+    },
+    {
+      tour_title: 'Санкт-Петербург: белые ночи',
+      user_email: null,
+      manager_email: 'manager@turist.ru',
+      client_name: 'Дмитрий Волков',
+      client_phone: '79853456789',
+      birth_date: '1998-10-05',
+      passport_series_number: '4511876543',
+      passport_issued_by: 'ОВД района Тропарёво-Никулино г. Москвы',
+      passport_expires_at: '2034-11-20',
+      comment: 'Нужны места в центре, заселение после 14:00.',
+      status: 'new',
+    },
+    {
+      tour_title: 'Казань: третья столица',
+      user_email: 'user3@turist.ru',
+      manager_email: null,
+      client_name: 'Екатерина Титова',
+      client_phone: '79175566778',
+      birth_date: '1993-04-27',
+      passport_series_number: '4513223344',
+      passport_issued_by: 'УФМС по Республике Татарстан',
+      passport_expires_at: '2032-05-09',
+      comment: 'Отменила: не совпали даты сессии.',
+      status: 'cancelled',
+    },
+    {
+      tour_title: 'Ереван: колыбель вина',
+      user_email: null,
+      manager_email: 'manager@turist.ru',
+      client_name: 'Сергей Панкратов',
+      client_phone: '79266789012',
+      birth_date: '1966-12-08',
+      passport_series_number: '4514998877',
+      passport_issued_by: 'ОВД Приморского района г. Санкт-Петербурга',
+      passport_expires_at: '2028-01-30',
+      comment: 'Просил программу дегустаций и места у окна в самолёте.',
+      status: 'confirmed',
+    },
+    {
+      tour_title: 'Сухум: гостеприимная Абхазия',
+      user_email: null,
+      manager_email: 'manager2@turist.ru',
+      client_name: 'Ирина Фёдорова',
+      client_phone: '79517890123',
+      birth_date: '1987-09-13',
+      passport_series_number: '4515443322',
+      passport_issued_by: 'УМВД России по Ростовской области',
+      passport_expires_at: '2033-10-01',
+      comment: 'Едем с ребёнком 6 лет, нужен второй билет на трансфер.',
+      status: 'new',
+    },
+    {
+      tour_title: 'Баку: восточный колорит',
+      user_email: 'user@turist.ru',
+      manager_email: null,
+      client_name: 'Максим Новиков',
+      client_phone: '79628901234',
+      birth_date: '2001-01-21',
+      passport_series_number: '4516556677',
+      passport_issued_by: 'ОВД района Марьино г. Москвы',
+      passport_expires_at: '2035-02-15',
+      comment: '',
+      status: 'confirmed',
+    },
+    {
+      tour_title: 'Прага: сказка на Влтаве',
+      user_email: null,
+      manager_email: 'manager2@turist.ru',
+      client_name: 'Вера Климова',
+      client_phone: '79779012345',
+      birth_date: '1972-03-17',
+      passport_series_number: '4517667788',
+      passport_issued_by: 'УФМС по Свердловской области',
+      passport_expires_at: '2030-04-26',
+      comment: 'Отмена: отказ в визе.',
+      status: 'cancelled',
+    },
+    {
+      tour_title: 'Карелия: суровый север',
+      user_email: 'user2@turist.ru',
+      manager_email: null,
+      client_name: 'Артём Гусев',
+      client_phone: '79050123456',
+      birth_date: '1996-11-02',
+      passport_series_number: '4518778899',
+      passport_issued_by: 'ОВД района Химки Московской области',
+      passport_expires_at: '2034-12-19',
+      comment: 'Нужно место в автобусе у окна, укачивает.',
+      status: 'new',
+    },
+    {
+      tour_title: 'Санкт-Петербург: белые ночи',
+      user_email: null,
+      manager_email: 'manager@turist.ru',
+      client_name: 'Юлия Захарова',
+      client_phone: '79111234567',
+      birth_date: '1990-08-25',
+      passport_series_number: '4519889900',
+      passport_issued_by: 'УМВД России по г. Казани',
+      passport_expires_at: '2031-09-12',
+      comment: 'Корпоративная поездка, счёт на ООО «Ромашка».',
+      status: 'confirmed',
+    },
+    {
+      tour_title: 'Дубай: город будущего',
+      user_email: null,
+      manager_email: 'manager2@turist.ru',
+      client_name: 'Роман Белов',
+      client_phone: '79992345678',
+      birth_date: '1984-05-11',
+      passport_series_number: '4520990011',
+      passport_issued_by: 'ОВД района Академический г. Москвы',
+      passport_expires_at: '2029-06-28',
+      comment: 'Отменена клиентом за неделю до вылета.',
+      status: 'cancelled',
+    },
+    {
+      tour_title: 'Анталья: экзотика и роскошь',
+      user_email: 'user3@turist.ru',
+      manager_email: null,
+      client_name: 'Татьяна Орлова',
+      client_phone: '79143456789',
+      birth_date: '1969-07-04',
+      passport_series_number: '4521102938',
+      passport_issued_by: 'УФМС по Калининградской области',
+      passport_expires_at: '2032-08-23',
+      comment: 'Прошу SPA-пакет и поздний выезд.',
+      status: 'confirmed',
+    },
   ];
 
+
+  // 12 колонок = 12 мест $1..$12 (passport_scan — последним).
   const insertBookingSQL = `
     INSERT INTO bookings (
       tour_id, user_id, manager_id,
       client_name, client_phone, comment, status,
-      birth_date, passport_series_number, passport_issued_by, passport_expires_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      birth_date, passport_series_number, passport_issued_by, passport_expires_at,
+      passport_scan
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
   `;
 
-  for (const b of (hasBookings ? [] : bookings)) {
+  for (const b of bookings) {
     const tourId = tourIdBy.get(b.tour_title);
     const userId = b.user_email ? userIdBy.get(b.user_email) : null;
     const managerId = b.manager_email ? userIdBy.get(b.manager_email) : null;
@@ -651,21 +938,62 @@ async function seed() {
       continue;
     }
 
+    // Заявка этого клиента на этот тур уже есть — не дублируем.
+    const key = `${b.client_phone}|${tourId}`;
+    if (existingKeys.has(key)) {
+      skippedExisting++;
+      continue;
+    }
+
+    // Если база уже содержит достаточно заявок — ничего не добавляем,
+    // только чиним passport_scan. Если нужно дозаполнить — вставляем
+    // все недостающие из набора (до 18 в сумме).
+    if (!needTopUp) {
+      skippedFull++;
+      continue;
+    }
+
     await pool.query(insertBookingSQL, [
       tourId, userId, managerId,
       b.client_name, b.client_phone, b.comment || null, b.status,
       b.birth_date, b.passport_series_number, b.passport_issued_by, b.passport_expires_at,
+      demoScan, // имя файла-образца или null, если копия не удалась
     ]);
+    existingKeys.add(key);
+    total++;
+    insertedNew++;
     console.log(`✅ Заявка [${b.status}]: ${b.client_name} → ${b.tour_title}`);
   }
 
+  // ─── Шаг 6. Проставляем образец скана старым тестовым заявкам ─────────────
+  // Заявки, созданные предыдущими запусками seed, остались с passport_scan
+  // IS NULL — бейдж в CRM показывает «Нет скана». Обновляем их только по
+  // телефонам из нашего набора: реальные заявки пользователей не трогаем.
+  let backfilled = 0;
+  if (demoScan) {
+    const result = await pool.query(
+      `UPDATE bookings
+          SET passport_scan = $1
+        WHERE passport_scan IS NULL
+          AND client_phone = ANY($2::text[])`,
+      [demoScan, bookings.map((b) => b.client_phone)]
+    );
+    backfilled = result.rowCount;
+    if (backfilled > 0) {
+      console.log(`✅ Образец скана проставлен ${backfilled} ранее созданным заявкам.`);
+    }
+  }
+
   const insertedTours = hasTours ? 0 : tours.length;
-  const insertedBookings = hasBookings ? 0 : bookings.length;
   console.log(
     `🎉 Seed завершён! Пользователей: ${users.length}, ` +
-    `добавлено туров: ${insertedTours}, заявок: ${insertedBookings}.`
+    `добавлено туров: ${insertedTours}, ` +
+    `заявок добавлено: ${insertedNew}, уже было: ${skippedExisting}, ` +
+    `пропущено (база полна): ${skippedFull}, ` +
+    `passport_scan обновлён у ${backfilled}, всего заявок в базе: ${total}.`
   );
 }
+
 
 // seed() — async-функция, поэтому ошибка приходит не в try/catch, а в промис.
 // .catch перехватывает её, печатает текст и ставит код возврата 1,
