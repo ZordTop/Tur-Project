@@ -97,31 +97,6 @@ app.use('/profile', profileRouter);
 // внутри роутера. Раздаёт фото/сканы из uploads/, поиск, досье, отмену брони.
 app.use('/clients', clientsRouter);
 
-// ─── Личный кабинет: GET /profile ────────────────────────────────────────────
-// По контракту DATA_CONTRACT.md п.4: в шаблон попадают брони пользователя
-// с подтянутым tour_title и total_price.
-app.get('/profile', requireAuth, async (req, res, next) => {
-  try {
-    const [bookings] = await Promise.all([
-      pool.query(
-        `SELECT b.*, t.title AS tour_title, t.total_price, t.departure_at
-         FROM bookings b
-         LEFT JOIN tours t ON t.id = b.tour_id
-         WHERE b.user_id = $1
-         ORDER BY b.created_at DESC`,
-        [req.user.id]
-      ),
-    ]);
-
-    res.render('profile', {
-      title: 'Личный кабинет — Туристический сайт',
-      bookings: bookings.rows,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
 // ─── Панель менеджера: GET /manager (с фильтрами) ────────────────────────────
 // Фильтры совпадают с формой в manager.ejs: destination_country, destination_city,
 // departure_date, flight_class, hotel_stars, hotel_meal, transfer_type, maxPrice.
@@ -568,12 +543,15 @@ app.use((req, res) => {
   res.status(404).render('404', { title: 'Страница не найдена' });
 });
 
-// Обработчик ошибок: Express узнаёт его по четырём аргументам
+// Обработчик ошибок: Express узнаёт его по четырём аргументам.
+// Наружу отдаём подробности только в development: в production текст ошибки
+// БД/файловой системы может раскрыть внутреннее устройство приложения.
 app.use((err, req, res, next) => {
   console.error(err.stack);
+  const isDev = process.env.NODE_ENV !== 'production';
   res.status(500).render('error', {
     title: 'Ошибка сервера',
-    message: err.message,
+    message: isDev ? err.message : 'Внутренняя ошибка сервера. Попробуйте позже.',
     status: 500,
   });
 });

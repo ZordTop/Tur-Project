@@ -4,6 +4,16 @@
   /* ── Вспомогательные функции (безопасны при отсутствии полей) ── */
   var user = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
 
+  // Телефон профиля приводим к формату поля ввода (11 цифр, первая 7 или 8).
+  // У старых аккаунтов номер хранится как «8 989 497-09-94»: в поле с
+  // pattern="[0-9]{11}" такое значение не прошло бы браузерную проверку.
+  var userPhone = String((user && user.phone) || '').replace(/\D/g, '');
+  if (!/^[78]\d{10}$/.test(userPhone)) userPhone = '';
+
+  // Куда вернуть гостя после входа/регистрации — обратно на этот тур.
+  var tourId = tour.id != null ? tour.id : (typeof id !== 'undefined' ? id : '');
+  var bookNext = encodeURIComponent('/tours/' + tourId);
+
   // Маппинг ENUM-значений БД → человекочитаемые подписи
   var flightClassMap = { economy: 'Эконом', comfort: 'Комфорт', business: 'Бизнес' };
   var mealMap = { RO: 'Без питания', BB: 'Только завтраки', HB: 'Полупансион', AI: 'Всё включено' };
@@ -43,7 +53,6 @@
   }
 
   var imgSrc = imgPath(tour.image);
-  var bookAction = '/tours/' + (tour.id != null ? tour.id : (typeof id !== 'undefined' ? id : '')) + '/book';
 %>
 
 <section class="section">
@@ -309,7 +318,7 @@
 
           <div class="form__group">
             <label class="form__label" for="client_phone">Телефон <span style="color:var(--clr-danger);">*</span></label>
-            <input class="form__input" type="tel" id="client_phone" name="client_phone" value="<%= user.phone || '' %>" placeholder="79001234567" inputmode="tel" maxlength="11" pattern="[0-9]{11}" required>
+            <input class="form__input" type="tel" id="client_phone" name="client_phone" value="<%= userPhone %>" placeholder="79001234567" inputmode="tel" maxlength="11" pattern="[0-9]{11}" required>
             <span class="form__hint">Ровно 11 цифр, без пробелов и скобок</span>
           </div>
 
@@ -320,7 +329,7 @@
 
           <div class="form__group">
             <label class="form__label" for="passport_series_number">Серия и номер паспорта <span style="color:var(--clr-danger);">*</span></label>
-            <input class="form__input" type="text" id="passport_series_number" name="passport_series_number" placeholder="4510 123456" maxlength="11" pattern="[0-9]{10}" required>
+            <input class="form__input" type="text" id="passport_series_number" name="passport_series_number" placeholder="4510123456" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" required>
             <span class="form__hint">Ровно 10 цифр (4 цифры серии + 6 цифр номера)</span>
           </div>
 
@@ -368,10 +377,10 @@
       <% } else { %>
         <div class="booking-guest">
           <p class="booking-guest__text">
-            Чтобы забронировать тур, <a href="/login">войдите</a> в аккаунт или
-            <a href="/register">зарегистрируйтесь</a> — это займёт минуту.
+            Чтобы забронировать тур, <a href="/login?next=<%= bookNext %>">войдите</a> в аккаунт или
+            <a href="/register?next=<%= bookNext %>">зарегистрируйтесь</a> — это займёт минуту.
           </p>
-          <a class="btn btn--primary" href="/login">Войдите, чтобы забронировать</a>
+          <a class="btn btn--primary" href="/login?next=<%= bookNext %>">Войдите, чтобы забронировать</a>
         </div>
       <% } %>
     </section>

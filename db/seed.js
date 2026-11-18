@@ -42,14 +42,14 @@ const TOUR_IMAGES = [
 
 async function seed() {
   // ─── Шаг 1. Защита от повторного запуска ───
-  // Считаем, сколько строк уже лежит в tours. Если больше нуля — база
-  // заполнена, и мы выходим, чтобы не создавать дубликаты.
-  // Запись { rows: toursCount } берёт из ответа поле rows и называет его toursCount.
+  // Пользователи вставляются с ON CONFLICT (email) и безопасны при повторе,
+  // а туры и заявки проверяем ОТДЕЛЬНО: если прошлый запуск прервался после
+  // вставки туров, заявки всё равно должны создаться.
   const { rows: toursCount } = await pool.query('SELECT count(*) FROM tours');
   // count(*) возвращается строкой ('5'), поэтому parseInt делает из неё число.
-  if (parseInt(toursCount[0].count) > 0) {
-    console.log('⚠️  В таблице tours уже есть данные. Пропускаем seed.');
-    return;
+  const hasTours = parseInt(toursCount[0].count) > 0;
+  if (hasTours) {
+    console.log('⚠️  В таблице tours уже есть данные — туры пропускаем.');
   }
 
   // ─── Шаг 2. Готовим хэш пароля ───
@@ -116,9 +116,15 @@ async function seed() {
   // for...of перебирает массив по элементу. await внутри заставляет вставки
   // идти по очереди: первая завершилась — только тогда началась вторая.
   for (const u of users) {
-    // Массив подставляется в $1..$5 по порядку
-    await pool.query(insertUserSQL, [u.email, hashedPassword, u.full_name, u.phone, u.role]);
-    console.log(`✅ Создан пользователь: ${u.email} [${u.role}]`);
+    // Массив подставляется в $1..$5 по порядку.
+    // rowCount = 0, если email уже был (ON CONFLICT DO NOTHING) — так лог
+    // не выдаёт существующего пользователя за только что созданного.
+    const result = await pool.query(insertUserSQL, [u.email, hashedPassword, u.full_name, u.phone, u.role]);
+    console.log(
+      result.rowCount
+        ? `✅ Создан пользователь: ${u.email} [${u.role}]`
+        : `ℹ️  Пользователь уже существует: ${u.email}`
+    );
   }
 
   // ─── Шаг 4. Четырнадцать тестовых туров ───────────────────────────────────
@@ -510,7 +516,7 @@ async function seed() {
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
   `;
 
-  for (const t of tours) {
+  for (const t of (hasTours ? [] : tours)) {
     // Порядок значений в массиве обязан совпадать с порядком $1..$21 выше
     await pool.query(insertTourSQL, [
       t.title, t.description, t.image, t.rating, t.nights,
@@ -544,6 +550,14 @@ async function seed() {
 
   const { rows: savedTours } = await pool.query('SELECT id, title FROM tours');
   const tourIdBy = new Map(savedTours.map((t) => [t.title, Number(t.id)]));
+
+  // Заявки сеем только в пустую таблицу bookings — независимо от того,
+  // создавались ли туры в этом запуске или уже лежали в базе.
+  const { rows: bookingsCount } = await pool.query('SELECT count(*) FROM bookings');
+  const hasBookings = parseInt(bookingsCount[0].count) > 0;
+  if (hasBookings) {
+    console.log('⚠️  В таблице bookings уже есть данные — заявки пропускаем.');
+  }
 
   const bookings = [
     {
@@ -626,10 +640,16 @@ async function seed() {
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
   `;
 
-  for (const b of bookings) {
+  for (const b of (hasBookings ? [] : bookings)) {
     const tourId = tourIdBy.get(b.tour_title);
     const userId = b.user_email ? userIdBy.get(b.user_email) : null;
     const managerId = b.manager_email ? userIdBy.get(b.manager_email) : null;
+
+    // Тур с таким названием мог быть удалён/переименован — не роняем seed.
+    if (!tourId) {
+      console.log(`⚠️  Заявка ${b.client_name} пропущена: тур «${b.tour_title}» не найден.`);
+      continue;
+    }
 
     await pool.query(insertBookingSQL, [
       tourId, userId, managerId,
@@ -639,8 +659,11 @@ async function seed() {
     console.log(`✅ Заявка [${b.status}]: ${b.client_name} → ${b.tour_title}`);
   }
 
+  const insertedTours = hasTours ? 0 : tours.length;
+  const insertedBookings = hasBookings ? 0 : bookings.length;
   console.log(
-    `🎉 Seed завершён! ${users.length} пользователей, ${tours.length} туров, ${bookings.length} заявок.`
+    `🎉 Seed завершён! Пользователей: ${users.length}, ` +
+    `добавлено туров: ${insertedTours}, заявок: ${insertedBookings}.`
   );
 }
 

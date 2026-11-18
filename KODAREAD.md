@@ -2,9 +2,9 @@
 
 > **Назначение:** Моя рабочая памятка. В новом чате достаточно написать «прочитай KODAREAD.md» — и я знаю структуру проекта, историю исправлений и что осталось на будущее.
 >
-> **Статус (2026-11-17, этап 1 из 5):** Базовая ревизия закоммичена командой (`57bd0c5 fix`), затем поверх неё выполнены **мои правки этапа 1** (см. §0): хранилище `uploads/` + Docker-volume, 6 новых колонок в `bookings` (с миграцией), модуль `utils/validators.js`, валидация телефона/email на регистрации и в бронированиях, seed на 14 туров / 6 юзеров / 5 заявок. Проверено финальным интеграционным прогоном **52/52**. Плюс починены падения каталога (`ReferenceError`) и удалён мёртвый код (`services/tourService.js`, `tmp_test.js`). **Этап 3 выполнен:** multer, полная анкета туриста + валидация, мини-превью файлов, `enctype="multipart/form-data"` с CSRF через query.
+> **Статус (2026-11-17, финальный аудит):** в коде реализованы базовая ревизия и этапы **1, 3, 4, 5**. Витрина главной с фильтрами и кнопкой «Показать ещё» (фактический этап 2) в этой памятке отдельно не описывалась, но работает. Полная сверка с итоговым ТЗ, подтверждённые пункты и **открытые дефекты** — в §11.
 >
-> **HEAD на момент записи:** `027c79b` (merge PR #24). Мои правки этапа 1 — в рабочем дереве, не закоммичены (git-мутации без явной команды не делаю).
+> **HEAD на момент записи:** `5c9fce7` (`feat: photo`), рабочее дерево чистое. Docker: `tur-project-app` + `tur-project-db` — healthy (app запущен в dev-режиме с bind mount).
 
 ---
 
@@ -167,7 +167,7 @@ Tur-Project/
 ├── server.js              ← точка входа: сессии, flash, csrf, attachCurrentUser,
 │                            маршруты /manager, /manager/book, /admin/* CRUD,
 │                            404/500, graceful shutdown
-├── package.json           ← express, ejs, pg, bcryptjs, express-session (без новых зависимостей!)
+├── package.json           ← express, ejs, pg, bcryptjs, express-session, multer (6 зависимостей)
 ├── Dockerfile / docker-compose.yml / docker-compose.dev.yml   ← + volume uploads_data
 ├── .gitignore / .dockerignore                                 ← + игнор uploads/*
 ├── DATA_CONTRACT.md       ← контракт таблиц (bookings расширена блоком 4) и переменных шаблонов
@@ -180,11 +180,13 @@ Tur-Project/
 │   ├── index.js           ← GET /, /healthz, /about
 │   ├── tours.js           ← GET /tours (фильтры), GET /tours/:id, POST /tours/:id/book
 │   ├── auth.js            ← login/register (валидация через utils/validators), logout, /me
-│   └── profile.js         ← ⭐ GET /profile — брони клиента (client_name/phone + детали тура)
+│   ├── profile.js         ← ⭐ GET /profile — брони клиента (client_name/phone + детали тура)
+│   └── clients.js         ← ⭐ CRM (этап 4): список, досье, отмена брони, защищённые файлы
 ├── middlewares/
 │   ├── auth.js            ← attachCurrentUser, requireAuth, requireRole, dropSession
 │   ├── csrf.js            ← CSRF-токен в сессии, сверка на POST/PUT/PATCH/DELETE
-│   └── flash.js           ← req.flash() + res.locals.flash (одноразовые сообщения)
+│   ├── flash.js           ← req.flash() + res.locals.flash (одноразовые сообщения)
+│   └── upload.js          ← ⭐ multer (этап 3): приём фото/скана, лимиты, чистка файлов
 ├── utils/
 │   ├── tourFilters.js     ← parseFilters/buildConditions — единые фильтры
 │   │                        для /tours и /manager (ключи = name-атрибуты форм)
@@ -195,10 +197,13 @@ Tur-Project/
 │   │                        через ALTER ... ADD COLUMN IF NOT EXISTS + индексы; pool.end()
 │   └── seed.js            ← 6 юзеров + 14 туров (реальные .jpg/.webp) + 5 заявок; pool.end()
 ├── views/                 ← index, tours, tour, about, login, register,
-│                            profile, manager, admin, 404, error + partials/(header,footer)
+│                            profile, manager, admin, clients, client-detail,
+│                            404, error + partials/(header,footer) — 15 шаблонов
 └── public/
-    ├── css/style.css      ← есть .alert--success/--error/--info
-    ├── js/main.js         ← бургер, табы, сайдбар менеджера, restoreFiltersFromUrl
+    ├── css/style.css      ← ~3100 строк: alert, ролевые темы, терминал, CRM,
+    │                        конструктор туров, превью файлов, «Показать ещё»
+    ├── js/main.js         ← 621 строка: бургер, табы, сайдбар, bookPanel,
+    │                        «Показать ещё», копирование, confirm, превью, конструктор
     └── images/            ← 14 реальных фото (.jpg/.webp), на них ссылается seed
                              + 5 старых SVG-заглушек (seed их больше не использует)
 ```
@@ -323,9 +328,9 @@ urlencoded/json → static → trust proxy → session → flash → csrf → at
 - **`restoreFiltersFromUrl` в main.js** теперь избыточен (бэкенд всегда отдаёт `filters`), но безвреден — оставлен как fallback.
 - В tours.ejs функция `val()` принимает старые алиасы (`country`, `city`, `hotelStars`, `max_price`) — harmless legacy, можно почистить.
 - **Конструктор туров реализован:** создание и редактирование туров прямо в админ-панели (`/admin`) с авторасчётом цены, валидацией всех полей и live-калькулятором.
-- **Загрузка файлов ещё не реализована:** папки, volume и колонки `client_photo`/`passport_scan` готовы, но маршрутов приёма файлов (multer и т.п.) и полей `enctype="multipart/form-data"` пока нет — это следующий этап. Зависимостей не добавляли.
+- **Загрузка файлов реализована (этап 3):** `middlewares/upload.js` (multer 2.x, diskStorage, MIME jpeg/png/webp, 5 МБ), обе формы бронирования отправляют `multipart/form-data` с CSRF в query, в БД — только имя файла.
 - **`uploads/` в dev не виден на хосте:** в `docker-compose.dev.yml` том монтируется поверх bind-mount, поэтому файлы лежат в volume, а не в рабочей копии. Посмотреть: `docker compose exec app ls uploads/photos`.
-- **Телефон реального аккаунта** (`zubairzord@gmail.com`, `8 989 497-09-94`) остался в старом формате — реальные данные не переписывал. Его новые заявки уже сохраняются нормализованными.
+- **Телефон реального аккаунта** (`zubairzord@gmail.com`, `8 989 497-09-94`) остался в старом формате — реальные данные не переписывал. Его новые заявки уже сохраняются нормализованными. ⚠️ Но в `tour.ejs` этот номер подставляется в поле с `pattern="[0-9]{11}"`, поэтому браузер не даст отправить форму, пока пользователь не перепишет номер (дефект A-08, §11).
 
 
 ---
@@ -545,4 +550,47 @@ app.engine('ejs', (filePath, options, callback) => {
 - Мини-превью работает только для картинок; PDF не поддерживается (по ТЗ — только изображения).
 - В `validateBookingData` `comment` — необязательное, остальные 6 полей строги.
 - `passport_series_number`: форма допускает пробел (`"4510 123456"`) для удобства, но сервер через `validatePassport` оставляет 10 цифр без пробела.
+
+---
+
+## 11. Финальный аудит (2026-11-17) — сверка с итоговым ТЗ
+
+**HEAD:** `5c9fce7` (`feat: photo`), рабочее дерево чистое.
+**Docker:** `tur-project-app` и `tur-project-db` — healthy; app запущен в dev-режиме (bind mount + `node --watch`).
+
+### 11.1 Что подтверждено на реальном коде
+
+- `node --check` — **16/16** JS-файлов; компиляция EJS — **15/15** шаблонов.
+- БД: **14 туров**, **7 пользователей** (6 seed + реальный аккаунт), **5 заявок** (3 new / 1 confirmed / 1 cancelled), `total_price` — 0 расхождений, в `bookings` **15 колонок** (включая 6 паспортных).
+- Все **14** путей картинок из `db/seed.js` существуют в `public/images`.
+- Свежий процесс на `:3999` (та же БД): гость `/clients` → `302 /login`; менеджер `/clients` → `200` (5 карточек), `/clients/1` → `200`; админ `/admin` → `200` (14 кнопок редактирования + конструктор); клиент `/profile` → `200`, `/admin` → `302 access_denied`; фильтр «Турция» → 2 карточки; JSON-каталог → 6 из 14, `hasMore: true`.
+- **CSRF:** все **13** POST-форм в шаблонах содержат `_csrf` (включая 3 формы logout; обе multipart-формы — через `?_csrf=` в action).
+- **`/clients/files/...`:** гость → `302 /login`, клиент → `302 access_denied`, менеджер → `404` (нет файла) / `400` (неверный тип или traversal `..%2F`, `..%5C`).
+- Валидаторы: телефон — ровно 11 цифр с `7`/`8`; паспорт — ровно 10 цифр; дата рождения — в прошлом, 0–120 лет; срок паспорта — не просрочен; `is_blocked` — 403 на входе и мгновенный разлогин через `attachCurrentUser`.
+
+### 11.2 Открытые дефекты
+
+| ID | Где | Проблема |
+|---|---|---|
+| A-01 | `public/css/style.css:896` и `:1409` | Два разных `.filters`: старый задаёт `display:grid` + `repeat(auto-fit,minmax(150px,1fr))`, новый — только оформление. В новой разметке (`filters__head` / `filters__grid` / `filters__actions`) дети становятся колонками → панель фильтров на `/` и `/tours` верстается неверно. |
+| A-02 | `public/css/style.css:686` и `:832` | Дубль `.alert`: поздний `max-width:420px` сужает **все** flash-сообщения сайта. |
+| A-03 | `public/css/style.css` | Повторяются секции «25/26/27» и блоки `.form__input`, `.btn--secondary`, `.admin-table`, `.form__actions` — наследие слияния, работает по принципу «последний выигрывает». |
+| A-04 | `server.js:100-123` | Мёртвый дубль `GET /profile` (перекрыт `app.use('/profile', profileRouter)`). |
+| A-05 | `views/tour.ejs:369-374` | Гость видит ссылки `/login` и `/register` без `next` → после входа попадает на `/tours`, а не обратно к туру. |
+| A-06 | `routes/tours.js:153-168` | При невалидном/скрытом `:id` файлы уже сохранены multer и не удаляются (`next()` без `removeUploadedFiles`). |
+| A-07 | `views/admin.ejs:240` | `data-tour='<%- JSON.stringify(...) %>'` без экранирования: апостроф в названии ломает атрибут, потенциальный XSS. |
+| A-08 | `views/tour.ejs:312`, `manager.ejs:331` | `pattern="[0-9]{11}"` + prefilled телефон реального аккаунта `8 989 497-09-94` → браузер не даёт отправить форму. |
+| A-09 | `views/tour.ejs:323`, `manager.ejs:342` | `maxlength="11"` при `pattern="[0-9]{10}"`: номер с пробелом (`4510 123456`) не проходит браузерную проверку, хотя сервер его принимает. |
+| A-10 | `db/seed.js:48-53` | Идемпотентность проверяет только `tours`: если туры есть, а заявок нет — seed выйдет и заявки не создаст. |
+| A-11 | `server.js:572-579` | 500-страница отдаёт `err.message` наружу. |
+| A-12 | `routes/auth.js:202` | `GET /logout` меняет состояние без CSRF. |
+| A-13 | инфраструктура | Dev-контейнер на `:3000` отдавал старый код (`/clients` → 404) из-за `node --watch` + Windows bind mount; нужен restart контейнера. |
+
+### 11.3 Расхождения документации
+
+- `DATA_CONTRACT.md` §4: фильтры описаны как `{ country, city, maxPrice, nights, hotelStars }`, фактически — snake_case (`destination_country`, `destination_city`, `hotel_stars`, …) плюс `countries` (для `/tours`) и `filters` (для `/manager`).
+- `DATA_CONTRACT.md` §3: `client_photo` / `passport_scan` описаны как путь `/uploads/...`, фактически хранится **имя файла**, раздача — `/clients/files/<type>/<filename>`.
+- `db/init.js`: `CREATE TABLE` — `passport_series_number VARCHAR(20)`, `ALTER` — `VARCHAR(50)` (разная длина на новой и мигрированной базе).
+- `PROJECT_ANALYSIS.md`: устаревшие счётчики (зависимостей 6, шаблонов 15, `main.js` 621 строка, CSS ~3100 строк).
+- `README.md`: упоминает удалённый `data/`, нет PostgreSQL, `db/init.js`, `db/seed.js`, `DATABASE_URL`, `SESSION_SECRET`.
 

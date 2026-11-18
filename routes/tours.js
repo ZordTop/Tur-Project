@@ -154,6 +154,8 @@ router.post('/:id/book', requireAuth, uploadBookingDocs, async (req, res, next) 
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
+      // Файлы уже приняты multer — на диске они не нужны, раз заявки не будет.
+      removeUploadedFiles(req);
       return next();
     }
 
@@ -164,6 +166,7 @@ router.post('/:id/book', requireAuth, uploadBookingDocs, async (req, res, next) 
     );
     const tour = tourResult.rows[0];
     if (!tour) {
+      removeUploadedFiles(req);
       return next();
     }
 

@@ -193,13 +193,10 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-// POST /auth/logout — завершение сессии (форма выхода)
+// POST /auth/logout — завершение сессии (форма выхода).
+// Выход меняет состояние, поэтому выполняется только POST-ом с CSRF-токеном:
+// GET-вариант позволял разлогинить пользователя чужой страницей (logout-CSRF).
 router.post('/logout', (req, res) => {
-  dropSession(req, res, '/');
-});
-
-// GET /auth/logout — выход по ссылке (для шапки сайта)
-router.get('/logout', (req, res) => {
   dropSession(req, res, '/');
 });
 
