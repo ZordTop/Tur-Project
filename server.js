@@ -235,8 +235,10 @@ function validateTourData(req) {
   }
 
   // rating: null если пустое, иначе число 1.0–5.0
+  // String() обязателен: при дублирующем параметре (?rating=1&rating=2)
+  // querystring отдаёт массив, а у массива нет .trim() — было бы 500.
   let rating = null;
-  if ((req.body.rating || '').trim() !== '') {
+  if (String(req.body.rating ?? '').trim() !== '') {
     const r = Number(req.body.rating);
     if (!Number.isFinite(r) || r < 1.0 || r > 5.0) {
       errors.push('Рейтинг должен быть числом от 1.0 до 5.0.');
@@ -317,8 +319,11 @@ function validateTourData(req) {
       departure_city: String(req.body.departure_city).trim(),
       destination_country: String(req.body.destination_country).trim(),
       destination_city: String(req.body.destination_city).trim(),
-      departure_at,
-      arrival_at,
+      // Переменные объявлены в camelCase (departureAt/arrivalAt), поэтому здесь
+      // нужна полная запись «ключ: значение». Short-hand (`departure_at,`) ищет
+      // одноимённую переменную и падает с ReferenceError — это и была ошибка 500.
+      departure_at: departureAt,
+      arrival_at: arrivalAt,
       flight_duration: String(req.body.flight_duration).trim(),
       flight_class: flightClass,
       flight_price: flightPrice,
@@ -364,7 +369,11 @@ app.post('/admin/tours/create', requireAuth, requireRole('admin'), async (req, r
     req.flash('success', 'Новый тур успешно создан и добавлен в каталог');
     res.redirect('/admin');
   } catch (err) {
-    next(err);
+    // Ошибка БД или неожиданное исключение: пишем настоящий текст в лог,
+    // пользователю — понятное сообщение и возврат в админку вместо «500».
+    console.error('POST /admin/tours/create:', err);
+    req.flash('error', 'Не удалось создать тур. Попробуйте ещё раз.');
+    res.redirect('/admin');
   }
 });
 
@@ -412,7 +421,11 @@ app.post('/admin/tours/:id/edit', requireAuth, requireRole('admin'), async (req,
     req.flash('success', 'Изменения в туре сохранены');
     res.redirect('/admin');
   } catch (err) {
-    next(err);
+    // Ошибка БД или неожиданное исключение: пишем настоящий текст в лог,
+    // пользователю — понятное сообщение и возврат в админку вместо «500».
+    console.error('POST /admin/tours/:id/edit:', err);
+    req.flash('error', 'Не удалось сохранить изменения тура.');
+    res.redirect('/admin');
   }
 });
 
