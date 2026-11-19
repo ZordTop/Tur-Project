@@ -5,41 +5,69 @@
  ==================================================================== */
 
 /* ===== 0. CSS-переменные ===== */
-:root {
-  /* Цвета */
-  --clr-bg: #f2f4f7;
+:root,
+[data-theme="light"] {
+  /* Цвета — светлая тема (слоновая кость / белый) */
+  --clr-bg: #f4f7f9;
   --clr-surface: #ffffff;
-  --clr-text: #1a1d23;
-  --clr-muted: #6b7280;
-  --clr-primary: #2563eb;
-  --clr-primary-hover: #1d4ed8;
-  --clr-primary-light: #eff6ff;
+  --clr-text: #1e293b;
+  --clr-muted: #64748b;
+  --clr-primary: #0284c7;
+  --clr-primary-hover: #0369a1;
+  --clr-primary-light: #e0f2fe;
   --clr-accent: #0d9488;
   --clr-accent-hover: #0f766e;
   --clr-danger: #dc2626;
   --clr-danger-hover: #b91c1c;
-  --clr-border: #e5e7eb;
+  --clr-border: #e2e8f0;
   --clr-success: #16a34a;
   --clr-warning: #f59e0b;
   --clr-info: #3b82f6;
 
   /* Градиенты */
-  --grad-hero: linear-gradient(135deg, #1e3a5f 0%, #2563eb 50%, #0d9488 100%);
-  --grad-card: linear-gradient(135deg, #2563eb 0%, #0d9488 100%);
+  --grad-hero: linear-gradient(135deg, #0c4a6e 0%, #0284c7 50%, #0d9488 100%);
+  --grad-card: linear-gradient(135deg, #0284c7 0%, #0d9488 100%);
 
   /* Размеры */
-  --radius-sm: 6px;
+  --radius-sm: 8px;
   --radius: 12px;
-  --radius-lg: 18px;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
-  --shadow: 0 4px 18px rgba(0,0,0,0.07);
-  --shadow-lg: 0 10px 36px rgba(0,0,0,0.1);
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+  --shadow: 0 4px 18px rgba(0,0,0,0.06);
+  --shadow-lg: 0 10px 36px rgba(0,0,0,0.09);
   --shadow-xl: 0 16px 48px rgba(0,0,0,0.12);
   --container: 1180px;
   --header-h: 64px;
   --font: "Inter", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
   --transition: 0.2s ease;
+}
+
+/* ===== 0.1. Тёмная тема ===== */
+[data-theme="dark"] {
+  --clr-bg: #0f172a;
+  --clr-surface: #1e293b;
+  --clr-text: #f1f5f9;
+  --clr-muted: #94a3b8;
+  --clr-primary: #38bdf8;
+  --clr-primary-hover: #7dd3fc;
+  --clr-primary-light: #0c4a6e;
+  --clr-accent: #2dd4bf;
+  --clr-accent-hover: #5eead4;
+  --clr-danger: #f87171;
+  --clr-danger-hover: #fca5a5;
+  --clr-border: #334155;
+  --clr-success: #4ade80;
+  --clr-warning: #fbbf24;
+  --clr-info: #60a5fa;
+
+  --grad-hero: linear-gradient(135deg, #0c4a6e 0%, #0284c7 50%, #0f766e 100%);
+  --grad-card: linear-gradient(135deg, #0284c7 0%, #0d9488 100%);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+  --shadow: 0 4px 18px rgba(0,0,0,0.25);
+  --shadow-lg: 0 10px 36px rgba(0,0,0,0.35);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.4);
 }
 
 /* ===== 1. Сброс и база ===== */
@@ -83,7 +111,7 @@ p { margin: 0 0 12px; }
   top: 0;
   z-index: 100;
   height: var(--header-h);
-  background: rgba(255,255,255,0.94);
+  background: var(--clr-surface);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--clr-border);
 }
@@ -501,7 +529,7 @@ p { margin: 0 0 12px; }
 .card__price {
   font-size: 1.2rem;
   font-weight: 800;
-  color: var(--clr-text);
+  color: var(--clr-primary);
 }
 .card__price small {
   font-size: 0.78rem;
@@ -543,8 +571,8 @@ p { margin: 0 0 12px; }
 }
 
 .badge--status-new {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--clr-primary-light);
+  color: var(--clr-primary);
 }
 .badge--status-confirmed {
   background: #dcfce7;
@@ -715,8 +743,19 @@ p { margin: 0 0 12px; }
 }
 .alert--info {
   background: var(--clr-primary-light);
-  color: #1e40af;
-  border: 1px solid #bfdbfe;
+  color: var(--clr-primary);
+  border: 1px solid var(--clr-border);
+}
+
+[data-theme="dark"] .alert--error {
+  background: #450a0a;
+  color: #fca5a5;
+  border-color: #7f1d1d;
+}
+[data-theme="dark"] .alert--success {
+  background: #052e16;
+  color: #86efac;
+  border-color: #14532d;
 }
 
 /* ===== 13. Строгие таблицы ===== */
@@ -736,7 +775,7 @@ table {
 }
 
 thead {
-  background: #f8fafc;
+  background: var(--clr-bg);
 }
 
 th {
@@ -759,7 +798,7 @@ td {
 tbody tr:last-child td { border-bottom: none; }
 
 tbody tr:hover {
-  background: #f8fafc;
+  background: var(--clr-bg);
 }
 
 /* ===== 14. Табы ===== */
@@ -1556,7 +1595,7 @@ tbody tr:hover {
   gap: 14px;
   padding: 18px 20px;
   background: var(--clr-primary-light);
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--clr-border);
   border-radius: var(--radius);
 }
 
@@ -1685,7 +1724,7 @@ tbody tr:hover {
   justify-content: space-between;
   padding: 14px 20px;
   border-top: 1px solid var(--clr-border);
-  background: #fbfcfe;
+  background: var(--clr-bg);
 }
 
 .package-card__price-label {
@@ -1808,7 +1847,7 @@ tbody tr:hover {
   padding: 16px 18px;
   margin-bottom: 18px;
   background: var(--clr-primary-light);
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--clr-border);
   border-radius: var(--radius);
 }
 
@@ -1981,7 +2020,7 @@ tbody tr:hover {
 /* ─── Компактная форма фильтра ─── */
 .ws-filter {
   padding: 14px;
-  background: #f8fafc;
+  background: var(--clr-bg);
   border-bottom: 1px solid var(--clr-border);
 }
 
@@ -2116,7 +2155,7 @@ tbody tr:hover {
 }
 
 .term-table tbody tr:nth-child(even) td {
-  background: #fbfcfe;
+  background: var(--clr-bg);
 }
 
 .term-table tbody tr:hover td {
@@ -2442,49 +2481,45 @@ tbody tr:hover {
 /* ─── Ролевое визуальное разделение интерфейсов ─── */
 /* Гость и клиент: стандартный вид (белая шапка, синий акцент) */
 
-/* Менеджер: тёмная шапка сайта — «служебный вход» */
+/* Менеджер: индиго/сапфировый акцент — CRM-стиль */
+body.role-manager {
+  --clr-primary: #4f46e5;
+  --clr-primary-hover: #4338ca;
+  --clr-primary-light: #eef2ff;
+}
+[data-theme="dark"] body.role-manager {
+  --clr-primary: #6366f1;
+  --clr-primary-hover: #818cf8;
+  --clr-primary-light: #312e81;
+}
 body.role-manager .header {
-  background: #0f172a;
-  border-bottom-color: #1e293b;
+  border-bottom-color: var(--clr-border);
 }
-body.role-manager .header .logo,
-body.role-manager .header .logo:hover { color: #fff; }
-body.role-manager .header .nav__link { color: #cbd5e1; }
-body.role-manager .header .nav__link:hover,
-body.role-manager .header .nav__link.is-active {
-  background: rgba(255,255,255,0.1);
-  color: #fff;
-}
-body.role-manager .header .user-menu__name { color: #e2e8f0; }
-body.role-manager .header .burger { border-color: #334155; }
-body.role-manager .header .burger span { background: #e2e8f0; }
 
-/* Админ: тёмная шапка с золотой полосой — уровень доступа выше */
+/* Админ: фиолетово-сливовый акцент — визуально отличает от клиентской витрины */
+body.role-admin {
+  --clr-primary: #7c3aed;
+  --clr-primary-hover: #6d28d9;
+  --clr-primary-light: #f5f3ff;
+}
+[data-theme="dark"] body.role-admin {
+  --clr-primary: #a78bfa;
+  --clr-primary-hover: #c4b5fd;
+  --clr-primary-light: #3b0764;
+}
 body.role-admin .header {
-  background: #0f172a;
-  border-bottom: 3px solid var(--clr-warning);
+  border-bottom-color: var(--clr-border);
 }
-body.role-admin .header .logo,
-body.role-admin .header .logo:hover { color: #fff; }
-body.role-admin .header .nav__link { color: #cbd5e1; }
-body.role-admin .header .nav__link:hover,
-body.role-admin .header .nav__link.is-active {
-  background: rgba(255,255,255,0.1);
-  color: #fff;
-}
-body.role-admin .header .user-menu__name { color: #e2e8f0; }
-body.role-admin .header .burger { border-color: #334155; }
-body.role-admin .header .burger span { background: #e2e8f0; }
 
-/* Мобильное меню в тёмной шапке */
+/* Мобильное меню */
 @media (max-width: 720px) {
   body.role-manager .nav,
   body.role-admin .nav {
-    background: #0f172a;
-    border-bottom-color: #1e293b;
+    background: var(--clr-surface);
+    border-bottom-color: var(--clr-border);
   }
   body.role-manager .nav__link,
-  body.role-admin .nav__link { color: #cbd5e1; }
+  body.role-admin .nav__link { color: var(--clr-text); }
 }
 
 /* ===== 29. Адаптив ===== */
@@ -3140,7 +3175,7 @@ body.role-admin .header .burger span { background: #e2e8f0; }
   gap: 10px;
   width: 100%;
   padding: 14px 20px;
-  background: #f8fafc;
+  background: var(--clr-bg);
   border: none;
   font: inherit;
   font-weight: 700;
@@ -3475,3 +3510,194 @@ body.role-admin .header .burger span { background: #e2e8f0; }
     padding-top: 14px;
   }
 }
+
+/* ===== 30. Тёмная тема: коррекция захардкоженных цветов ===== */
+[data-theme="dark"] .badge--status-confirmed {
+  background: #052e16;
+  color: #86efac;
+}
+[data-theme="dark"] .badge--status-cancelled {
+  background: #450a0a;
+  color: #fca5a5;
+}
+[data-theme="dark"] .badge--stars {
+  background: #451a03;
+  color: #fde047;
+}
+[data-theme="dark"] .badge--meal {
+  background: #3b0764;
+  color: #d8b4fe;
+}
+[data-theme="dark"] .badge--class {
+  background: #082f49;
+  color: #7dd3fc;
+}
+[data-theme="dark"] .badge--transfer {
+  background: #052e16;
+  color: #86efac;
+}
+[data-theme="dark"] .badge--rating {
+  background: rgba(30, 41, 59, 0.92);
+  color: #fde047;
+}
+[data-theme="dark"] .badge--role-user {
+  background: var(--clr-primary-light);
+  color: var(--clr-primary);
+}
+[data-theme="dark"] .badge--role-manager {
+  background: #312e81;
+  color: #a5b4fc;
+}
+[data-theme="dark"] .badge--role-admin {
+  background: #451a03;
+  color: #fde047;
+}
+[data-theme="dark"] .badge--docs-ok {
+  background: #052e16;
+  color: #86efac;
+}
+[data-theme="dark"] .badge--blocked {
+  background: #450a0a;
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .feature__icon--blue { background: var(--clr-primary-light); }
+[data-theme="dark"] .feature__icon--teal { background: #042f2e; }
+[data-theme="dark"] .feature__icon--amber { background: #451a03; }
+
+[data-theme="dark"] .booking-guest {
+  background: #451a03;
+  border-color: #92400e;
+}
+[data-theme="dark"] .booking-guest__text {
+  color: #fde047;
+}
+[data-theme="dark"] .booking-guest__text a {
+  color: #fde047;
+}
+
+[data-theme="dark"] .tour-hero__rating {
+  background: #451a03;
+  color: #fde047;
+}
+
+[data-theme="dark"] .package-card__icon--hotel { background: #451a03; }
+[data-theme="dark"] .package-card__icon--transfer { background: #052e16; }
+
+[data-theme="dark"] .crm-copy.is-copied {
+  background: #052e16;
+  color: #86efac;
+  border-color: #14532d;
+}
+
+[data-theme="dark"] .crm-scan__img {
+  background: #1e293b;
+}
+
+[data-theme="dark"] .term-badge--st-new {
+  background: #1e3a5f;
+  color: #93c5fd;
+  border-color: #1d4ed8;
+}
+[data-theme="dark"] .term-badge--st-confirmed {
+  background: #052e16;
+  color: #86efac;
+  border-color: #166534;
+}
+[data-theme="dark"] .term-badge--st-cancelled {
+  background: #450a0a;
+  color: #fca5a5;
+  border-color: #991b1b;
+}
+[data-theme="dark"] .term-badge--meal {
+  background: #3b0764;
+  color: #d8b4fe;
+  border-color: #7e22ce;
+}
+[data-theme="dark"] .term-stars {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .ws-block__head {
+  background: #334155;
+}
+
+[data-theme="dark"] .btn--primary:hover {
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.3);
+}
+[data-theme="dark"] .btn--accent:hover {
+  box-shadow: 0 4px 14px rgba(45, 212, 191, 0.3);
+}
+[data-theme="dark"] .btn--danger:hover {
+  box-shadow: 0 4px 14px rgba(248, 113, 113, 0.3);
+}
+[data-theme="dark"] .btn--white {
+  background: #1e293b;
+  color: var(--clr-primary);
+}
+[data-theme="dark"] .btn--white:hover {
+  background: #334155;
+  color: var(--clr-primary);
+}
+
+[data-theme="dark"] .form__input:focus {
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+}
+
+[data-theme="dark"] .term-table th {
+  background: #334155;
+  border-bottom-color: #475569;
+}
+
+[data-theme="dark"] .bp-summary {
+  background: #334155;
+}
+
+/* ===== 31. Переключатель темы ===== */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--clr-bg);
+  border: 1px solid var(--clr-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), transform var(--transition);
+  flex-shrink: 0;
+}
+.theme-toggle:hover {
+  background: var(--clr-primary-light);
+  border-color: var(--clr-primary);
+  transform: scale(1.08);
+}
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+  color: var(--clr-muted);
+  transition: color var(--transition);
+}
+.theme-toggle:hover svg {
+  color: var(--clr-primary);
+}
+.theme-toggle__icon--moon { display: none; }
+[data-theme="dark"] .theme-toggle__icon--sun { display: none; }
+[data-theme="dark"] .theme-toggle__icon--moon { display: block; }
+
+/* Доп. тёмная тема: иконки и списки в карточках */
+[data-theme="dark"] .card__list-item { color: var(--clr-muted); }
+[data-theme="dark"] .card__list-item strong { color: var(--clr-text); }
+[data-theme="dark"] .card__list-icon { color: var(--clr-muted); }
+
+/* Паспортные данные и скан */
+[data-theme="dark"] .crm-passport-row { background: var(--clr-bg); }
+[data-theme="dark"] .crm-scan { background: var(--clr-bg); }
+[data-theme="dark"] .crm-scan-empty { background: var(--clr-bg); }
+
+/* CRM-карточки и панели */
+[data-theme="dark"] .crm-card__tour { background: var(--clr-bg); border-color: var(--clr-border); }
+
+/* Legal-документы */
+[data-theme="dark"] .legal-doc { background: var(--clr-surface); }
