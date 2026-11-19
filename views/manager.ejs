@@ -333,6 +333,21 @@
       </div>
 
       <div class="form__group">
+        <label class="form__label" for="bp-client_email">Email клиента <span style="color:var(--clr-danger);">*</span></label>
+        <input class="form__input" type="email" id="bp-client_email" name="client_email" placeholder="client@example.ru" required>
+        <span class="bp-hint">для входа клиента на сайт</span>
+      </div>
+
+      <div class="form__group">
+        <label class="form__label" for="bp-client_password">Пароль для входа клиента <span style="color:var(--clr-danger);">*</span></label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="form__input" type="password" id="bp-client_password" name="client_password" placeholder="Минимум 8 символов" minlength="8" required style="flex:1;">
+          <button type="button" class="btn btn--sm btn--secondary" id="bp-generate-password" data-tooltip="Сгенерировать пароль">⚡</button>
+        </div>
+        <span class="bp-hint">минимум 8 символов; кнопка «⚡» подставит случайный пароль</span>
+      </div>
+
+      <div class="form__group">
         <label class="form__label" for="bp-birth_date">Дата рождения <span style="color:var(--clr-danger);">*</span></label>
         <input class="form__input" type="date" id="bp-birth_date" name="birth_date" required>
       </div>

@@ -217,6 +217,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (firstInput) setTimeout(() => firstInput.focus(), 250);
       });
     });
+
+    // Генерация читаемого пароля для аккаунта клиента ( Части 1 )
+    // Формат: Tur2026!x9 — слово + год + спецсимвол + 2 случайных символа
+    const generateBtn = document.getElementById('bp-generate-password');
+    const passwordInput = document.getElementById('bp-client_password');
+    if (generateBtn && passwordInput) {
+      generateBtn.addEventListener('click', () => {
+        const consonants = 'bcdfghjklmnpqrstvwxyz';
+        const vowels = 'aeiou';
+        const specials = '!@#$%&*';
+        const random = (str) => str[Math.floor(Math.random() * str.length)];
+        const year = new Date().getFullYear();
+
+        // Читаемая часть: Tur + год
+        let pwd = 'Tur' + year;
+        // Спецсимвол
+        pwd += random(specials);
+        // 2 случайных буквы (согласная + гласная или наоборот)
+        pwd += Math.random() > 0.5 ? random(consonants) + random(vowels) : random(vowels) + random(consonants);
+        // Цифра
+        pwd += String(Math.floor(Math.random() * 10));
+
+        passwordInput.value = pwd;
+        passwordInput.type = 'text';
+        setTimeout(() => { passwordInput.type = 'password'; }, 3000);
+      });
+    }
   }
 
   // ── 10. Витрина главной: подгрузка туров «Показать ещё» ──
@@ -495,6 +522,8 @@ document.addEventListener('DOMContentLoaded', () => {
   })();
 
   // ── 14. Конструктор туров (админ-панель, Этап 5) ──
+  // Авторасчёт прилёта: departure_at + flight_duration_minutes = arrival_at
+  // flight_duration (строка) — авто из минут. departure_at ≥ сегодня.
   (function tourBuilder() {
     const toggle = document.getElementById('tour-builder-toggle');
     const body = document.getElementById('tour-builder-body');
@@ -512,31 +541,45 @@ document.addEventListener('DOMContentLoaded', () => {
       form.querySelector('[name="transfer_price"]'),
     ];
 
-    // Расчёт итоговой цены
-    function updateTotal() {
-      let sum = 0;
-      priceFields.forEach((f) => {
-        const v = Number(f.value);
-        if (Number.isFinite(v) && v >= 0) sum += v;
-      });
-      // Форматирование с пробелами: 85 400
-      totalPreview.textContent = sum.toLocaleString('ru-RU');
+    // Ссылки на поля авторасчёта
+    const departureInput = form.querySelector('[name="departure_at"]');
+    const arrivalInput = form.querySelector('[name="arrival_at"]');
+    const durationInput = form.querySelector('[name="flight_duration"]');
+    const durationMinutesInput = form.querySelector('[name="flight_duration_minutes"]');
+    const durationReadable = document.getElementById('tb-duration-readable');
+
+    // ── Утилиты ──
+
+    // «2ч 40мин» → 160; «6ч» → 360; «40мин» → 40; «160» → 160
+    function parseDurationToMinutes(str) {
+      if (str == null) return null;
+      const s = String(str).trim();
+      if (!s) return null;
+
+      // Только число — трактуем как минуты (допустимо по DATA_CONTRACT.md, п. 2)
+      if (/^\d+$/.test(s)) return Number(s);
+
+      // Часы + необязательные минуты: «2ч 40мин», «3ч10мин», «6ч», «2h 40m»
+      const hm = s.match(
+        /^(\d+)\s*(?:ч|час|часов|hours?|hrs?|h)(?:\s*(\d+)\s*(?:м|мин|minutes?|mins?|m))?$/i
+      );
+      if (hm) return Number(hm[1]) * 60 + (Number(hm[2]) || 0);
+
+      // Только минуты: «40мин», «40m»
+      const mm = s.match(/^(\d+)\s*(?:м|мин|minutes?|mins?|m)$/i);
+      if (mm) return Number(mm[1]);
+
+      return null;
     }
 
-    priceFields.forEach((f) => {
-      if (f) f.addEventListener('input', updateTotal);
-    });
-
-    // Сворачивание/разворачивание конструктора
-    if (toggle && body) {
-      toggle.addEventListener('click', () => {
-        const isVisible = body.style.display !== 'none';
-        body.style.display = isVisible ? 'none' : 'block';
-        toggle.querySelector('.tour-builder__toggle-icon').textContent = isVisible ? '＋' : '−';
-      });
+    // минуты → «2ч 40мин»
+    function formatReadable(mins) {
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return `${h}ч ${m}мин`;
     }
 
-    // Форматирование ISO-даты в datetime-local: YYYY-MM-DDTHH:mm
+    // ISO-даты в datetime-local: YYYY-MM-DDTHH:mm
     function toDatetimeLocal(dateStr) {
       if (!dateStr) return '';
       const d = new Date(dateStr);
@@ -546,7 +589,77 @@ document.addEventListener('DOMContentLoaded', () => {
         + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
     }
 
-    // Режим редактирования: заполняем форму данными тура
+    // ── Авторасчёт: прилёт + читаемая строка ──
+    function recalcArrival() {
+      const depVal = departureInput ? departureInput.value : '';
+      const minsVal = durationMinutesInput ? durationMinutesInput.value : '';
+      if (!depVal || !minsVal) {
+        if (arrivalInput) arrivalInput.value = '';
+        if (durationInput) durationInput.value = '';
+        if (durationReadable) durationReadable.textContent = '—';
+        return;
+      }
+      const depDate = new Date(depVal);
+      if (isNaN(depDate.getTime())) {
+        if (arrivalInput) arrivalInput.value = '';
+        if (durationInput) durationInput.value = '';
+        if (durationReadable) durationReadable.textContent = '—';
+        return;
+      }
+      const mins = Number(minsVal);
+      if (!Number.isFinite(mins) || mins <= 0) {
+        if (arrivalInput) arrivalInput.value = '';
+        if (durationInput) durationInput.value = '';
+        if (durationReadable) durationReadable.textContent = '—';
+        return;
+      }
+      const arrDate = new Date(depDate.getTime() + mins * 60 * 1000);
+      if (arrivalInput) arrivalInput.value = toDatetimeLocal(arrDate);
+      if (durationInput) durationInput.value = formatReadable(mins);
+      if (durationReadable) durationReadable.textContent = formatReadable(mins);
+    }
+
+    // ── Счётчик итоговой цены ──
+    function updateTotal() {
+      let sum = 0;
+      priceFields.forEach((f) => {
+        const v = Number(f.value);
+        if (Number.isFinite(v) && v >= 0) sum += v;
+      });
+      totalPreview.textContent = sum.toLocaleString('ru-RU');
+    }
+
+    priceFields.forEach((f) => {
+      if (f) f.addEventListener('input', updateTotal);
+    });
+
+    // ── Минимальное значение departure_at = сейчас ──
+    function setMinNow() {
+      if (departureInput) {
+        // datetime-local принимает формат YYYY-MM-DDTHH:mm;
+        // ставим текущие часы и минуты (секунды = 00).
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        departureInput.setAttribute('min',
+          now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate())
+          + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes()));
+      }
+    }
+
+    // Слушатели авторасчёта
+    if (departureInput) departureInput.addEventListener('input', recalcArrival);
+    if (durationMinutesInput) durationMinutesInput.addEventListener('input', recalcArrival);
+
+    // ── Сворачивание/разворачивание конструктора ──
+    if (toggle && body) {
+      toggle.addEventListener('click', () => {
+        const isVisible = body.style.display !== 'none';
+        body.style.display = isVisible ? 'none' : 'block';
+        toggle.querySelector('.tour-builder__toggle-icon').textContent = isVisible ? '＋' : '−';
+      });
+    }
+
+    // ── Режим редактирования ──
     document.querySelectorAll('[data-edit-tour]').forEach((btn) => {
       btn.addEventListener('click', () => {
         let tour;
@@ -557,13 +670,11 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        // Раскрываем блок конструктора если скрыт
         if (body && body.style.display === 'none') {
           body.style.display = 'block';
           if (toggle) toggle.querySelector('.tour-builder__toggle-icon').textContent = '−';
         }
 
-        // Заполняем поля
         const setVal = (name, value) => {
           const el = form.querySelector('[name="' + name + '"]');
           if (el) el.value = value != null ? String(value) : '';
@@ -578,8 +689,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setVal('destination_country', tour.destination_country);
         setVal('destination_city', tour.destination_city);
         setVal('departure_at', toDatetimeLocal(tour.departure_at));
-        setVal('arrival_at', toDatetimeLocal(tour.arrival_at));
-        setVal('flight_duration', tour.flight_duration);
         setVal('flight_class', tour.flight_class);
         setVal('flight_price', tour.flight_price);
         setVal('hotel_name', tour.hotel_name);
@@ -589,21 +698,28 @@ document.addEventListener('DOMContentLoaded', () => {
         setVal('transfer_type', tour.transfer_type);
         setVal('transfer_price', tour.transfer_price);
 
-        // Меняем заголовок и action формы
+        // Парсим flight_duration → минуты → заполняем flight_duration_minutes
+        const parsedMins = parseDurationToMinutes(tour.flight_duration);
+        if (durationMinutesInput && parsedMins != null) {
+          durationMinutesInput.value = parsedMins;
+        } else if (durationMinutesInput) {
+          durationMinutesInput.value = '';
+        }
+
+        // Пересчитаем прилёт и строку
+        recalcArrival();
+
         formTitle.textContent = 'Редактирование тура #' + tour.id;
         form.action = '/admin/tours/' + tour.id + '/edit';
         submitBtn.textContent = 'Сохранить изменения';
         cancelBtn.style.display = 'inline-flex';
 
-        // Обновляем превью итоговой цены
         updateTotal();
-
-        // Прокручиваем к форме
         form.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
 
-    // Отмена редактирования: сброс формы в режим создания
+    // ── Отмена редактирования ──
     if (cancelBtn) {
       cancelBtn.addEventListener('click', () => {
         form.reset();
@@ -612,10 +728,12 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.textContent = 'Создать тур';
         cancelBtn.style.display = 'none';
         totalPreview.textContent = '0';
+        recalcArrival();
       });
     }
 
-    // Первичный расчёт при загрузке (на случай если поля уже заполнены сервером)
+    // Инициализация
+    setMinNow();
     updateTotal();
   })();
 });

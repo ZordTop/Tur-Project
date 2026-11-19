@@ -2,6 +2,7 @@ const path = require('path');
 const express = require('express');
 const session = require('express-session');
 const ejs = require('ejs');
+const bcrypt = require('bcryptjs');
 
 const indexRouter = require('./routes/index');
 const toursRouter = require('./routes/tours');
@@ -13,7 +14,7 @@ const csrf = require('./middlewares/csrf');
 const flash = require('./middlewares/flash');
 const pool = require('./db/pool');
 const { parseFilters, buildConditions } = require('./utils/tourFilters');
-const { validateBookingData } = require('./utils/validators');
+const { validateBookingData, validateEmail } = require('./utils/validators');
 const { uploadBookingDocs, removeUploadedFiles, getUploadedFileName } = require('./middlewares/upload');
 
 const app = express();
@@ -134,20 +135,21 @@ app.get('/manager', requireAuth, requireRole('admin', 'manager'), async (req, re
 // POST /manager/book — заявка, оформленная менеджером.
 // Форма в manager.ejs отправляет анкету туриста и файлы в multipart/form-data.
 // middleware uploadBookingDocs обрабатывает файлы, затем хендлер валидирует паспортные данные.
+// В рамках одной транзакции создаётся (или привязывается) аккаунт клиента и заявка.
 app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), uploadBookingDocs, async (req, res, next) => {
+  let client = null;
   try {
     const tourId = Number(req.body.tour_id);
 
-    // Проверяем, что тур существует.
-    const tourResult = await pool.query(
-      'SELECT id, title FROM tours WHERE id = $1',
-      [tourId]
-    );
-    if (!tourResult.rows[0]) {
+    // Email клиента — обязателен для создания/привязки аккаунта.
+    const clientEmail = validateEmail(req.body.client_email);
+    if (!clientEmail) {
       removeUploadedFiles(req);
-      req.flash('error', 'Выбранный тур не найден.');
+      req.flash('error', 'Укажите корректный email клиента (например: client@example.ru).');
       return res.redirect('/manager');
     }
+
+    const clientPassword = String(req.body.client_password || '');
 
     // Валидация анкеты туриста (без дефолтов — менеджер заполняет все поля).
     const validation = validateBookingData(req.body);
@@ -164,19 +166,99 @@ app.post('/manager/book', requireAuth, requireRole('admin', 'manager'), uploadBo
 
     const v = validation.values;
 
-    await pool.query(
+    // ── Транзакция: аккаунт клиента + заявка одним атомарным блоком ──
+    // Либо создаются оба записи, либо ни одной — при любой ошибке ROLLBACK
+    // откатывает и INSERT в users, и INSERT в bookings.
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    // Проверяем тур внутри транзакции (снимок актуален на момент записи).
+    const tourResult = await client.query(
+      'SELECT id, title FROM tours WHERE id = $1',
+      [tourId]
+    );
+    if (!tourResult.rows[0]) {
+      await client.query('ROLLBACK');
+      client.release();
+      client = null;
+      removeUploadedFiles(req);
+      req.flash('error', 'Выбранный тур не найден.');
+      return res.redirect('/manager');
+    }
+    const tourTitle = tourResult.rows[0].title;
+
+    // Ищем существующий аккаунт по email.
+    const existingUser = await client.query(
+      'SELECT id, is_blocked FROM users WHERE email = $1',
+      [clientEmail]
+    );
+
+    let targetUserId;
+    let accountCreated = false;
+
+    if (existingUser.rows[0]) {
+      // Аккаунт есть: заблокированного не привязываем, пароль НЕ перезаписываем.
+      if (existingUser.rows[0].is_blocked === true) {
+        await client.query('ROLLBACK');
+        client.release();
+        client = null;
+        removeUploadedFiles(req);
+        req.flash('error', `Аккаунт клиента заблокирован: ${clientEmail}`);
+        return res.redirect('/manager');
+      }
+      targetUserId = existingUser.rows[0].id;
+    } else {
+      // Email новый: пароль обязателен (минимум 8 символов).
+      if (clientPassword.length < 8) {
+        await client.query('ROLLBACK');
+        client.release();
+        client = null;
+        removeUploadedFiles(req);
+        req.flash('error', 'Пароль для нового аккаунта клиента должен быть не короче 8 символов.');
+        return res.redirect('/manager');
+      }
+      const passwordHash = await bcrypt.hash(clientPassword, 10);
+      const insertedUser = await client.query(
+        `INSERT INTO users (email, password_hash, full_name, phone, role)
+         VALUES ($1, $2, $3, $4, 'user') RETURNING id`,
+        [clientEmail, passwordHash, v.client_name, v.client_phone]
+      );
+      targetUserId = insertedUser.rows[0].id;
+      accountCreated = true;
+    }
+
+    // Заявка: одновременно user_id (аккаунт клиента) и manager_id (кто оформил).
+    await client.query(
       `INSERT INTO bookings (tour_id, user_id, manager_id, client_name, client_phone,
        birth_date, passport_series_number, passport_issued_by, passport_expires_at,
        client_photo, passport_scan, comment, status)
-       VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'confirmed')`,
-      [tourId, req.user.id, v.client_name, v.client_phone, v.birth_date,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed')`,
+      [tourId, targetUserId, req.user.id, v.client_name, v.client_phone, v.birth_date,
        v.passport_series_number, v.passport_issued_by, v.passport_expires_at,
        client_photo, passport_scan, v.comment]
     );
 
-    req.flash('success', `Заявка на «${tourResult.rows[0].title}» оформлена.`);
+    await client.query('COMMIT');
+    client.release();
+    client = null;
+
+    // Flash с указанием email — клиент дома войдёт на /login и увидит бронь в /profile.
+    if (accountCreated) {
+      req.flash('success',
+        `Заявка на «${tourTitle}» оформлена. Создан аккаунт клиента ${clientEmail} — ` +
+        'он сможет войти на /login и увидеть бронь в /profile.');
+    } else {
+      req.flash('success',
+        `Заявка на «${tourTitle}» оформлена и привязана к существующему аккаунту ${clientEmail} — ` +
+        'клиент увидит бронь в /profile.');
+    }
     res.redirect('/manager');
   } catch (err) {
+    // Откатываем транзакцию, если она ещё открыта, и освобождаем соединение.
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (_) { /* соединение уже могло закрыться */ }
+      client.release();
+    }
     removeUploadedFiles(req);
     next(err);
   }
@@ -213,15 +295,21 @@ app.get('/admin', requireAuth, requireRole('admin'), async (req, res, next) => {
 // ─── Конструктор туров (Этап 5) ────────────────────────────────────────────────
 // Валидация и подготовка данных тура (общая функция для create/edit).
 // Возвращает { ok: true, data: {...} } или { ok: false, errors: [...] }.
+//
+// Даты прилёта и строка «время в пути» НЕ берутся из формы: arrival_at и
+// flight_duration вычисляются строго на сервере из departure_at +
+// flight_duration_minutes, поэтому ручной ввод противоречивого прилёта
+// исключён полностью.
 
 function validateTourData(req) {
   const errors = [];
 
   // Обязательные текстовые поля
+  // flight_duration исключён из списка: его генерирует сервер из минут.
   const requiredText = [
     'title', 'description', 'departure_city',
     'destination_country', 'destination_city',
-    'flight_duration', 'hotel_name'
+    'hotel_name'
   ];
   for (const field of requiredText) {
     const val = String(req.body[field] || '').trim();
@@ -253,17 +341,45 @@ function validateTourData(req) {
     errors.push('Количество ночей — целое число ≥ 1.');
   }
 
-  // departure_at / arrival_at: корректные даты, arrival > departure
-  const departureAt = new Date(req.body.departure_at);
-  const arrivalAt   = new Date(req.body.arrival_at);
-  if (isNaN(departureAt.getTime())) {
-    errors.push('Укажите корректную дату и время вылета.');
+  // departure_at: корректная дата и НЕ в прошлом (не раньше начала сегодня)
+  let departureAt = null;
+  const rawDeparture = String(req.body.departure_at ?? '').trim();
+  if (!rawDeparture) {
+    errors.push('Укажите дату и время вылета.');
+  } else {
+    departureAt = new Date(rawDeparture);
+    if (isNaN(departureAt.getTime())) {
+      errors.push('Укажите корректную дату и время вылета.');
+      departureAt = null;
+    } else {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      if (departureAt < startOfToday) {
+        errors.push('Дата вылета не может быть в прошлом');
+      }
+    }
   }
-  if (isNaN(arrivalAt.getTime())) {
-    errors.push('Укажите корректную дату и время прилёта.');
+
+  // flight_duration_minutes: целое число минут > 0
+  let durationMinutes = null;
+  const rawMinutes = String(req.body.flight_duration_minutes ?? '').trim();
+  if (!rawMinutes) {
+    errors.push('Укажите время в пути в минутах.');
+  } else {
+    const m = Number(rawMinutes);
+    if (!Number.isInteger(m) || m <= 0) {
+      errors.push('Время в пути — целое число минут больше 0.');
+    } else {
+      durationMinutes = m;
+    }
   }
-  if (!isNaN(departureAt.getTime()) && !isNaN(arrivalAt.getTime()) && arrivalAt <= departureAt) {
-    errors.push('Время прилёта должно быть позже времени вылета.');
+
+  // arrival_at и flight_duration — только серверный расчёт.
+  let arrivalAt = null;
+  let flightDuration = null;
+  if (departureAt && durationMinutes != null) {
+    arrivalAt = new Date(departureAt.getTime() + durationMinutes * 60 * 1000);
+    flightDuration = `${Math.floor(durationMinutes / 60)}ч ${durationMinutes % 60}мин`;
   }
 
   // Enum-поля — строго по списку
@@ -319,12 +435,11 @@ function validateTourData(req) {
       departure_city: String(req.body.departure_city).trim(),
       destination_country: String(req.body.destination_country).trim(),
       destination_city: String(req.body.destination_city).trim(),
-      // Переменные объявлены в camelCase (departureAt/arrivalAt), поэтому здесь
-      // нужна полная запись «ключ: значение». Short-hand (`departure_at,`) ищет
-      // одноимённую переменную и падает с ReferenceError — это и была ошибка 500.
+      // departure_at — из формы (после проверки «не в прошлом»),
+      // arrival_at и flight_duration — только серверный расчёт из минут.
       departure_at: departureAt,
       arrival_at: arrivalAt,
-      flight_duration: String(req.body.flight_duration).trim(),
+      flight_duration: flightDuration,
       flight_class: flightClass,
       flight_price: flightPrice,
       hotel_name: String(req.body.hotel_name).trim(),

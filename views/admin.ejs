@@ -108,14 +108,22 @@
                 <div class="form__group">
                   <label class="form__label" for="tb-departure-at">Дата вылета</label>
                   <input class="form__input" type="datetime-local" id="tb-departure-at" name="departure_at" required>
+                  <small class="form__hint">нельзя выбрать дату в прошлом</small>
                 </div>
                 <div class="form__group">
-                  <label class="form__label" for="tb-arrival-at">Дата прилёта</label>
-                  <input class="form__input" type="datetime-local" id="tb-arrival-at" name="arrival_at" required>
+                  <label class="form__label" for="tb-flight-duration-minutes">Время в пути, минут</label>
+                  <input class="form__input" type="number" id="tb-flight-duration-minutes" name="flight_duration_minutes" min="1" step="1" placeholder="160" required>
+                  <small class="form__hint">в пути: <strong id="tb-duration-readable">—</strong></small>
                 </div>
                 <div class="form__group">
-                  <label class="form__label" for="tb-flight-duration">Время в пути</label>
-                  <input class="form__input" type="text" id="tb-flight-duration" name="flight_duration" placeholder="3ч 20мин" required>
+                  <label class="form__label" for="tb-arrival-at">Дата прилёта (авторасчёт)</label>
+                  <input class="form__input" type="datetime-local" id="tb-arrival-at" name="arrival_at" readonly tabindex="-1" aria-readonly="true">
+                  <small class="form__hint">вычисляется сервером: вылет + время в пути</small>
+                </div>
+                <div class="form__group">
+                  <label class="form__label" for="tb-flight-duration">Время в пути (строка)</label>
+                  <input class="form__input" type="text" id="tb-flight-duration" name="flight_duration" readonly tabindex="-1" aria-readonly="true">
+                  <small class="form__hint">заполняется автоматически из минут</small>
                 </div>
                 <div class="form__group">
                   <label class="form__label" for="tb-flight-class">Класс полёта</label>
