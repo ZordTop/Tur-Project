@@ -1,7 +1,29 @@
 // Клиентские скрипты: меню, активная ссылка, табы, модалки, сайдбар
 
 document.addEventListener('DOMContentLoaded', () => {
-  // ── 0. Показ / скрытие пароля ──
+  // ── 0. Переключатель темы (Светлая / Тёмная) ──
+  const themeToggle = document.getElementById('theme-toggle');
+  if (themeToggle) {
+    const applyIcon = () => {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      themeToggle.querySelectorAll('.theme-toggle__icon--sun').forEach(function(el) {
+        el.style.display = isDark ? 'none' : '';
+      });
+      themeToggle.querySelectorAll('.theme-toggle__icon--moon').forEach(function(el) {
+        el.style.display = isDark ? 'block' : 'none';
+      });
+    };
+    applyIcon();
+    themeToggle.addEventListener('click', function() {
+      var current = document.documentElement.getAttribute('data-theme');
+      var next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('tur_theme', next);
+      applyIcon();
+    });
+  }
+
+  // ── 1. Показ / скрытие пароля ──
   // HTML: <button data-toggle-password="password-id"> с двумя SVG-иконками
   document.querySelectorAll('[data-toggle-password]').forEach((btn) => {
     btn.addEventListener('click', () => {
